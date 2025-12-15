@@ -1,0 +1,17 @@
+Assembly Code,Item Code,Item Description,Quantity,Level,Material Cost,Landing Cost,Labour Cost,Part Category
+GMF-0130-A02,B103985,Main Frame Final Assembly,1,1,25.50,4.50,1.26,existing_part
+GMF-0130-A02,B103975,Main Frame Sub Assembly,1,2,12.00,2.10,0.90,existing_part
+GMF-0130-A02,B103986,Main Frame Welding Component,1,2,10.50,1.50,0.00,existing_part
+GMF-0130-A02,B119290,Serial Number Plate,1,1,1.20,0.20,0.10,new_part
+GMF-0130-A02,B119291,Frame Decal Set,1,1,0.85,0.15,0.00,existing_part
+GFF-0128-A01,B104500,Front Fork Assembly,1,1,18.75,3.25,0.50,existing_part
+GFF-0128-A01,B104501,Fork Crown,1,2,8.50,1.50,0.00,existing_part
+GFF-0128-A01,B104502,Fork Blade Left,1,2,5.25,0.90,0.00,existing_part
+GFF-0128-A01,B104503,Fork Blade Right,1,2,5.00,0.85,0.00,existing_part
+BCO-AU-08,B120000,Australia Compliance Label,1,1,0.50,0.10,0.00,new_part
+BCO-AU-08,B120001,Compliance Documentation,1,1,0.00,0.00,0.00,new_part
+GMF-0130-A02,B103990,Seat Post Assembly,1,1,15.00,2.50,0.75,existing_part
+GMF-0130-A02,B103991,Seat Post Tube,1,2,8.00,1.40,0.00,existing_part
+GMF-0130-A02,B103992,Seat Clamp,1,2,4.50,0.80,0.00,existing_part
+GMF-0130-A02,B103993,Seat Post Collar,1,2,2.50,0.30,0.00,existing_part
+

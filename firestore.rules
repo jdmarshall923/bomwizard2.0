@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Projects - authenticated users can read/write their own
+    match /projects/{projectId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && 
+        resource.data.createdBy == request.auth.uid;
+      
+      // Sub-collections follow parent permissions (one level deep)
+      match /{subcollection}/{docId} {
+        allow read, write: if isAuthenticated();
+        
+        // Nested sub-collections (e.g., versions/{versionId}/bomItems)
+        match /{nestedCollection}/{nestedDocId} {
+          allow read, write: if isAuthenticated();
+        }
+      }
+    }
+    
+    // Global items - all authenticated users can read
+    match /items/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Vendors - all authenticated users
+    match /vendors/{vendorId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Import templates - all authenticated users
+    match /importTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Contract prices - all authenticated users
+    match /contractPrices/{priceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Landing rates - all authenticated users
+    match /landingRates/{rateId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Manufacturing costs - all authenticated users
+    match /manufacturingCosts/{costId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+  }
+}
+

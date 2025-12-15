@@ -1,0 +1,39 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "bomItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "assemblyCode", "order": "ASCENDING" },
+        { "fieldPath": "level", "order": "ASCENDING" },
+        { "fieldPath": "sequence", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "quotes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "bomItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "itemCode", "order": "ASCENDING" },
+        { "fieldPath": "assemblyCode", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "quotes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "itemCode", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
+
