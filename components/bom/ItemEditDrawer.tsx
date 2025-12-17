@@ -30,7 +30,8 @@ import {
   AlertCircle,
   Save,
   X,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -39,6 +40,7 @@ interface ItemEditDrawerProps {
   open: boolean;
   onClose: () => void;
   onSave: (itemId: string, updates: Partial<BomItem>) => Promise<void>;
+  onDelete?: (itemId: string) => Promise<void>;
 }
 
 interface FormState {
@@ -46,11 +48,11 @@ interface FormState {
   materialCost: number;
   landingCost: number;
   labourCost: number;
-  costSource: 'contract' | 'quote' | 'estimate' | undefined;
+  costSource: 'placeholder' | 'contract' | 'quote' | 'estimate' | undefined;
   vendorId: string;
 }
 
-export function ItemEditDrawer({ item, open, onClose, onSave }: ItemEditDrawerProps) {
+export function ItemEditDrawer({ item, open, onClose, onSave, onDelete }: ItemEditDrawerProps) {
   const [formState, setFormState] = useState<FormState>({
     quantity: 0,
     materialCost: 0,
@@ -60,6 +62,7 @@ export function ItemEditDrawer({ item, open, onClose, onSave }: ItemEditDrawerPr
     vendorId: '',
   });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -122,6 +125,21 @@ export function ItemEditDrawer({ item, open, onClose, onSave }: ItemEditDrawerPr
       // For now, just close
     }
     onClose();
+  };
+
+  // Handle delete
+  const handleDelete = async () => {
+    if (!item || !onDelete) return;
+    
+    setDeleting(true);
+    setError(null);
+    
+    try {
+      await onDelete(item.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete item');
+      setDeleting(false);
+    }
   };
 
   const isPlaceholder = item?.itemCode?.startsWith('B') && /^B\d/.test(item?.itemCode || '');
@@ -315,33 +333,56 @@ export function ItemEditDrawer({ item, open, onClose, onSave }: ItemEditDrawerPr
           )}
         </div>
 
-        <SheetFooter className="mt-6 flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleClose}
-            disabled={saving}
-            className="flex-1"
-          >
-            <X className="h-4 w-4 mr-2" />
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleSave}
-            disabled={saving || !hasChanges}
-            className="flex-1 bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)]"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-2" />
-                Save Changes
-              </>
-            )}
-          </Button>
+        <SheetFooter className="mt-6 flex flex-col gap-2">
+          <div className="flex gap-2 w-full">
+            <Button 
+              variant="outline" 
+              onClick={handleClose}
+              disabled={saving || deleting}
+              className="flex-1"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSave}
+              disabled={saving || deleting || !hasChanges}
+              className="flex-1 bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)]"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </div>
+          
+          {onDelete && (
+            <Button 
+              variant="outline"
+              onClick={handleDelete}
+              disabled={saving || deleting}
+              className="w-full border-[var(--accent-red)]/50 text-[var(--accent-red)] hover:bg-[var(--accent-red)]/10"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Item
+                </>
+              )}
+            </Button>
+          )}
         </SheetFooter>
       </SheetContent>
     </Sheet>

@@ -23,6 +23,7 @@ interface BomTreeProps {
   onAssemblyClick?: (assemblyCode: string) => void;
   selectedItemId?: string | null;
   loading?: boolean;
+  readOnly?: boolean;
 }
 
 interface TreeNode {
@@ -34,6 +35,7 @@ interface TreeNode {
   itemCount: number;
   newPartsCount: number;
   placeholdersCount: number;
+  newPartTrackingCount: number; // Items flagged as isNewPart
 }
 
 export function BomTree({ 
@@ -43,19 +45,22 @@ export function BomTree({
   onAssemblyClick,
   selectedItemId,
   loading = false,
+  readOnly = false,
 }: BomTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [expandAll, setExpandAll] = useState(false);
 
-  // Build tree structure grouped by assembly
+  // Build tree structure grouped by assembly/group
   const treeNodes: TreeNode[] = useMemo(() => {
     const groups: Record<string, BomItem[]> = {};
     
     items.forEach(item => {
-      if (!groups[item.assemblyCode]) {
-        groups[item.assemblyCode] = [];
+      // Use groupCode if available, fall back to assemblyCode, then 'UNASSIGNED'
+      const groupKey = item.groupCode || item.assemblyCode || 'UNASSIGNED';
+      if (!groups[groupKey]) {
+        groups[groupKey] = [];
       }
-      groups[item.assemblyCode].push(item);
+      groups[groupKey].push(item);
     });
 
     return Object.entries(groups)
@@ -72,6 +77,7 @@ export function BomTree({
           placeholdersCount: assemblyItems.filter(item => 
             item.itemCode?.startsWith('B') && /^B\d/.test(item.itemCode)
           ).length,
+          newPartTrackingCount: assemblyItems.filter(item => item.isNewPart).length,
         };
       })
       .sort((a, b) => a.assemblyCode.localeCompare(b.assemblyCode));
@@ -197,6 +203,12 @@ export function BomTree({
 
             {/* Stats */}
             <div className="flex items-center gap-3 text-xs">
+              {node.newPartTrackingCount > 0 && (
+                <Badge className="bg-[var(--accent-purple)]/20 text-[var(--accent-purple)] border-[var(--accent-purple)]/30">
+                  <Sparkles className="h-3 w-3 mr-1" />
+                  {node.newPartTrackingCount} tracking
+                </Badge>
+              )}
               {node.newPartsCount > 0 && (
                 <Badge className="bg-[var(--accent-blue)]/20 text-[var(--accent-blue)] border-[var(--accent-blue)]/30">
                   <Sparkles className="h-3 w-3 mr-1" />
@@ -226,14 +238,16 @@ export function BomTree({
                 <div
                   key={item.id}
                   className={cn(
-                    'flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors',
-                    'hover:bg-[var(--bg-tertiary)]',
+                    'flex items-center gap-3 px-4 py-2.5 transition-colors',
+                    !readOnly && 'cursor-pointer hover:bg-[var(--bg-tertiary)]',
+                    readOnly && 'cursor-default',
                     selectedItemId === item.id && 'bg-[var(--accent-blue)]/10 border-l-2 border-l-[var(--accent-blue)]',
-                    item.partCategory === 'new_part' && 'bg-[var(--accent-blue)]/5',
-                    isPlaceholder(item.itemCode) && 'bg-[var(--accent-orange)]/5',
+                    item.isNewPart && 'bg-[var(--accent-purple)]/5 border-l-2 border-l-[var(--accent-purple)]',
+                    !item.isNewPart && item.partCategory === 'new_part' && 'bg-[var(--accent-blue)]/5',
+                    !item.isNewPart && isPlaceholder(item.itemCode) && 'bg-[var(--accent-orange)]/5',
                     index !== node.items.length - 1 && 'border-b border-[var(--border-subtle)]'
                   )}
-                  onClick={() => onItemClick?.(item)}
+                  onClick={() => !readOnly && onItemClick?.(item)}
                 >
                   {/* Indentation */}
                   <div className="w-6" />
@@ -288,14 +302,23 @@ export function BomTree({
                   </span>
                   
                   {/* Badges */}
-                  <div className="flex items-center gap-1 w-20 justify-end">
-                    {item.partCategory === 'new_part' && (
+                  <div className="flex items-center gap-1 w-28 justify-end">
+                    {item.isNewPart && (
+                      <Badge 
+                        variant="outline" 
+                        className="text-[10px] px-1.5 py-0 border-[var(--accent-purple)] text-[var(--accent-purple)] bg-[var(--accent-purple)]/10"
+                      >
+                        <Sparkles className="h-2.5 w-2.5 mr-0.5" />
+                        {item.newPartStatus || 'pending'}
+                      </Badge>
+                    )}
+                    {item.partCategory === 'new_part' && !item.isNewPart && (
                       <Sparkles className="h-3.5 w-3.5 text-[var(--accent-blue)]" />
                     )}
                     {isPlaceholder(item.itemCode) && (
                       <AlertCircle className="h-3.5 w-3.5 text-[var(--accent-orange)]" />
                     )}
-                    {item.costSource && (
+                    {item.costSource && !item.isNewPart && (
                       <Badge 
                         variant="outline" 
                         className={cn(

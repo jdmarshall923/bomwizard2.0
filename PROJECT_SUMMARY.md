@@ -163,31 +163,128 @@
 
 ---
 
+## ✅ Phase 3.5: Template → Working BOM Flow - COMPLETE
+
+**Status**: ✅ **100% Complete**  
+**Completed**: December 2024
+
+### What's Been Built
+
+**Template BOM System:**
+- ✅ Template BOM collection with full hierarchy (Levels 0-4+)
+- ✅ BOM Group extraction from `GRP-xxx` items
+- ✅ Group selection UI with categories
+- ✅ Split percentage support for variant options
+- ✅ Template vs Working BOM comparison hooks
+
+**Working BOM Builder:**
+- ✅ Create Working BOM from selected template groups
+- ✅ Add Item Dialog (search existing or create placeholder)
+- ✅ Add Group Dialog (create custom groups)
+- ✅ Delete item functionality
+- ✅ Inline editing in drawer
+
+**Vendor Contract Prices:**
+- ✅ Global VendorContractPrices collection
+- ✅ Import service for pricing data
+- ✅ Price matching by item code (B-code)
+- ✅ "Apply Vendor Prices" bulk action
+- ✅ Landing cost calculation from percentage
+
+**Master Data Pages:**
+- ✅ SLItems page with import
+- ✅ SLVendors page with import
+- ✅ VendorContractPrices page with import
+
+---
+
+## ✅ Phase 4: BOM Control Panel Redesign - COMPLETE
+
+**Status**: ✅ **100% Complete**  
+**Completed**: December 2024
+
+### What's Been Built
+
+**Master-Detail Panel Layout:**
+- Left Panel: Template BOM (read-only reference with checkbox selection)
+- Right Panel: Working BOM (editable, with pricing)
+- Transfer Bar: Copy selected items from template to working BOM
+
+**Cascading Checkbox Selection:**
+- Click group → all children selected
+- Uncheck individual items → group shows indeterminate state (▣)
+- Works with expand/collapse
+
+**Transfer Mechanism:**
+- Checkbox selection + "Copy to Working BOM" button
+- Duplicate detection (warns if item exists)
+- Auto-apply vendor pricing on transfer
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `components/bom/TemplateBomPanel.tsx` | Template BOM panel with checkbox tree |
+| `components/bom/WorkingBomPanel.tsx` | Working BOM panel with stats and views |
+| `components/bom/BomTransferBar.tsx` | Transfer action bar |
+| `lib/bom/transferService.ts` | Transfer logic and duplicate detection |
+
+### Layout
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        BOM Control Panel                         │
+├───────────────────────┬─────────────────────────────────────────┤
+│  TEMPLATE BOM (Left)  │          WORKING BOM (Right)            │
+│  ☑ GRP-FRAME-A01      │  Stats | Tree/Table | Costs            │
+│    ☑ B103985          │  ┌───────────────────────────────────┐  │
+│    ☑ B104001          │  │ Working BOM Items (editable)     │  │
+│  ▣ GRP-SEAT-A01       │  │                                   │  │
+│    ☑ B105001          │  └───────────────────────────────────┘  │
+│    ☐ B105002          │                                         │
+├───────────────────────┴─────────────────────────────────────────┤
+│  [Copy 3 Selected →]        [Clear Selection]                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## 📋 Remaining Phases
 
-### Phase 4: Version Control (2 weeks) - NEXT
+### Phase 5: Version Control (2 weeks) ✅ COMPLETE
 - Version snapshots
 - Diff algorithm
 - Change tracking
 - Comparison UI
+- Date range comparisons
 
-### Phase 5: Cost Analysis (2 weeks)
-- Cost dashboards
-- Charts and visualizations
-- Trend analysis
-- Export functionality
+### Phase 6: Cost Analysis (2 weeks) ✅ COMPLETE
+- Cost dashboards with summary cards
+- Charts and visualizations (Trend, Assembly, Drivers, Volatility)
+- Interactive donut/treemap assembly breakdown
+- Cost drivers analysis
+- Top items Pareto table
+- Export to CSV
 
-### Phase 6: Quote & Manufacturing (2 weeks)
-- Quote management
-- Kanban view
+### Phase 7: New Part Tracker & Manufacturing (2 weeks)
+- New Part Tracker (design → engineering → procurement → complete)
+- Kanban view for part lifecycle
+- Final B-code assignment when part complete
 - Manufacturing cost tracking
 - Cloud Functions automation
 
-### Phase 7: Polish & Launch (2 weeks)
+### Phase 8: Polish & Launch (2 weeks)
 - Performance optimization
 - Error handling
 - Documentation
 - Deployment
+
+### Phase 9: AI Integration (3-4 weeks)
+- Google Gemini-powered chat assistant
+- Natural language group suggestions ("I'm building a 4 speed bike")
+- BOM Q&A (costs, stats, comparisons)
+- AI-triggered actions with confirmation
+- See `PHASE_9_AI_PLAN.md` for details
 
 ---
 
@@ -266,16 +363,22 @@ bom_wizard2.0/
 
 - `README.md` - Main project documentation
 - `IMPLEMENTATION_STATUS.md` - Detailed progress tracking
+- `BOM_WORKFLOW.md` - **Template → Working BOM workflow** (core concept)
 - `PHASE_2_COMPLETE.md` - Phase 2 completion summary
 - `PHASE_3_COMPLETE.md` - Phase 3 completion summary
+- `PHASE_4_COMPLETE.md` - Phase 4 completion summary
+- `PHASE_5_PLAN.md` - Phase 5 Version Control documentation
+- `PHASE_6_COMPLETE.md` - **Phase 6 Cost Analysis** (latest)
 - `scripts/README.md` - Firebase setup instructions
 
 ---
 
 ## 🎯 Current Status
 
-**Phases Complete:** 3 of 7  
-**Components Implemented:** 15+  
+**Phases Complete:** 6 of 8  
+**Current Phase:** Phase 6 - Cost Analysis ✅ Complete  
+**Next Phase:** Phase 7 - New Part Tracker & Manufacturing  
+**Components Implemented:** 40+  
 **Pages Functional:** 25+
 
 ### Key Achievements
@@ -286,15 +389,28 @@ bom_wizard2.0/
 ✅ Search, filter, and inline editing  
 ✅ Real-time updates  
 ✅ Modern UI with glass morphism  
+✅ Template BOM with group extraction  
+✅ Group selection and configuration  
+✅ Vendor Contract Price matching  
+✅ Master data pages (SLItems, SLVendors, VendorContractPrices)  
+✅ **BOM Control Panel with master-detail layout**  
+✅ **Cascading checkbox selection**  
+✅ **Transfer mechanism with auto-pricing**  
+✅ **Version Control with snapshots and comparisons**  
+✅ **Date range cost comparison**  
+✅ **Cost Analysis Dashboard with charts**  
+✅ **Cost trend visualization**  
+✅ **Cost drivers and Pareto analysis**  
 
-### Ready for Phase 4
-The foundation is solid. Version control is the next milestone, which will enable:
-- Tracking changes over time
-- Comparing BOM versions
-- Understanding cost impacts
+### Next: Phase 7 - New Part Tracker & Manufacturing
+
+1. **Kanban Board**: Track new parts through design/procurement lifecycle
+2. **Status Workflow**: Added → Design → Engineering → Procurement → Complete
+3. **Final B-code Assignment**: When part complete, assign final B-code
+4. **Manufacturing Cost Tracking**: Track manufacturing costs and labour
 
 ---
 
-**Status**: Phases 1-3 Complete | Ready for Phase 4  
+**Status**: Phases 1-6 Complete | Phase 7 Next  
 **Last Updated**: December 2024
 

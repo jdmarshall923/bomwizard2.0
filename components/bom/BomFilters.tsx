@@ -17,7 +17,9 @@ import {
   AlertCircle, 
   TrendingUp,
   Filter,
-  RotateCcw
+  RotateCcw,
+  PlusCircle,
+  FileSearch
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BomFilters as BomFiltersType } from '@/lib/hooks/useBom';
@@ -28,6 +30,7 @@ interface BomFiltersProps {
   assemblyCodes: string[];
   itemCount?: number;
   filteredCount?: number;
+  compact?: boolean;
 }
 
 export function BomFilters({ 
@@ -36,12 +39,15 @@ export function BomFilters({
   assemblyCodes,
   itemCount = 0,
   filteredCount = 0,
+  compact = false,
 }: BomFiltersProps) {
   const hasActiveFilters = 
     filters.searchTerm || 
     filters.showNewParts || 
     filters.showPlaceholders || 
     filters.showCostChanges ||
+    filters.showAddedItems ||
+    filters.showNewPartTracking ||
     filters.assemblyCode ||
     filters.costSource;
 
@@ -49,6 +55,8 @@ export function BomFilters({
     filters.showNewParts,
     filters.showPlaceholders,
     filters.showCostChanges,
+    filters.showAddedItems,
+    filters.showNewPartTracking,
     filters.assemblyCode,
     filters.costSource,
   ].filter(Boolean).length;
@@ -59,11 +67,118 @@ export function BomFilters({
       showNewParts: false,
       showPlaceholders: false,
       showCostChanges: false,
+      showAddedItems: false,
+      showNewPartTracking: false,
       assemblyCode: null,
       costSource: null,
     });
   };
 
+  // Compact mode for use in panels
+  if (compact) {
+    return (
+      <div className="space-y-2">
+        {/* Compact: Search + Quick filters in one row */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[140px]">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-tertiary)]" />
+            <Input
+              placeholder="Search..."
+              value={filters.searchTerm}
+              onChange={(e) => onFiltersChange({ ...filters, searchTerm: e.target.value })}
+              className="pl-7 pr-7 h-7 text-xs"
+            />
+            {filters.searchTerm && (
+              <button
+                onClick={() => onFiltersChange({ ...filters, searchTerm: '' })}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Quick filter buttons - compact */}
+          <Button
+            variant={filters.showNewParts ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => onFiltersChange({ ...filters, showNewParts: !filters.showNewParts })}
+            className={cn(
+              'h-7 w-7 p-0',
+              filters.showNewParts && 'bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)]'
+            )}
+            title="New Parts"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+          </Button>
+
+          <Button
+            variant={filters.showPlaceholders ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => onFiltersChange({ ...filters, showPlaceholders: !filters.showPlaceholders })}
+            className={cn(
+              'h-7 w-7 p-0',
+              filters.showPlaceholders && 'bg-[var(--accent-orange)] hover:bg-[var(--accent-orange-hover)]'
+            )}
+            title="Placeholders"
+          >
+            <AlertCircle className="h-3.5 w-3.5" />
+          </Button>
+
+          <Button
+            variant={filters.showAddedItems ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => onFiltersChange({ ...filters, showAddedItems: !filters.showAddedItems })}
+            className={cn(
+              'h-7 w-7 p-0',
+              filters.showAddedItems && 'bg-[var(--accent-purple)] hover:bg-[var(--accent-purple)]/80'
+            )}
+            title="Added Items"
+          >
+            <PlusCircle className="h-3.5 w-3.5" />
+          </Button>
+
+          <Button
+            variant={filters.showNewPartTracking ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => onFiltersChange({ ...filters, showNewPartTracking: !filters.showNewPartTracking })}
+            className={cn(
+              'h-7 w-7 p-0',
+              filters.showNewPartTracking && 'bg-[var(--accent-pink)] hover:bg-[var(--accent-pink)]/80'
+            )}
+            title="New Part Tracking"
+          >
+            <FileSearch className="h-3.5 w-3.5" />
+          </Button>
+
+          {/* Reset */}
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetFilters}
+              className="h-7 w-7 p-0 text-[var(--text-secondary)]"
+              title="Reset filters"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </Button>
+          )}
+
+          {/* Count */}
+          <span className="text-[10px] text-[var(--text-secondary)] whitespace-nowrap">
+            {filteredCount === itemCount ? (
+              `${itemCount}`
+            ) : (
+              `${filteredCount}/${itemCount}`
+            )}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // Full mode (default)
   return (
     <div className="space-y-4">
       {/* Main filter row */}
@@ -121,9 +236,10 @@ export function BomFilters({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Sources</SelectItem>
-            <SelectItem value="contract">Contract</SelectItem>
-            <SelectItem value="quote">Quote</SelectItem>
+            <SelectItem value="placeholder">Placeholder</SelectItem>
             <SelectItem value="estimate">Estimate</SelectItem>
+            <SelectItem value="quote">Quote</SelectItem>
+            <SelectItem value="contract">Contract</SelectItem>
           </SelectContent>
         </Select>
 
@@ -185,6 +301,32 @@ export function BomFilters({
         >
           <TrendingUp className="h-3 w-3 mr-1" />
           Cost Changes
+        </Button>
+
+        <Button
+          variant={filters.showAddedItems ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => onFiltersChange({ ...filters, showAddedItems: !filters.showAddedItems })}
+          className={cn(
+            'text-xs h-7',
+            filters.showAddedItems && 'bg-[var(--accent-purple)] hover:bg-[var(--accent-purple)]/80'
+          )}
+        >
+          <PlusCircle className="h-3 w-3 mr-1" />
+          Added Items
+        </Button>
+
+        <Button
+          variant={filters.showNewPartTracking ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => onFiltersChange({ ...filters, showNewPartTracking: !filters.showNewPartTracking })}
+          className={cn(
+            'text-xs h-7',
+            filters.showNewPartTracking && 'bg-[var(--accent-purple)] hover:bg-[var(--accent-purple)]/80'
+          )}
+        >
+          <FileSearch className="h-3 w-3 mr-1" />
+          New Part Tracking
         </Button>
 
         {/* Filter summary */}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, FolderOpen, Package, Building2, PoundSterling, Globe, Settings, Plug, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Home, FolderOpen, Package, Building2, PoundSterling, Settings, Plug, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
@@ -12,10 +12,9 @@ const navigation = [
   {
     name: 'Master Data',
     items: [
-      { name: 'Items Master', href: '/data/items', icon: Package },
-      { name: 'Vendors', href: '/data/vendors', icon: Building2 },
-      { name: 'Contract Prices', href: '/data/prices', icon: PoundSterling },
-      { name: 'Landing Rates', href: '/data/landing-rates', icon: Globe },
+      { name: 'SLItems', href: '/data/sl-items', icon: Package },
+      { name: 'SLVendors', href: '/data/sl-vendors', icon: Building2 },
+      { name: 'VendorContractPrices', href: '/data/vendor-contract-prices', icon: PoundSterling },
     ],
   },
   {

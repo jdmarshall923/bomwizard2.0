@@ -64,6 +64,11 @@ export async function parseCSV(
       Papa.parse(file, {
         ...config,
         complete: (results) => {
+          console.log('CSV parsed successfully:', results.data.length, 'rows');
+          console.log('Headers:', results.meta.fields);
+          if (results.data.length > 0) {
+            console.log('First row:', results.data[0]);
+          }
           resolve({
             data: results.data as any[],
             headers: results.meta.fields || [],
@@ -71,6 +76,7 @@ export async function parseCSV(
           });
         },
         error: (error) => {
+          console.error('CSV parse error:', error);
           reject(error);
         },
       });

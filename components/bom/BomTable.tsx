@@ -46,6 +46,7 @@ interface BomTableProps {
   selectedItemId?: string | null;
   loading?: boolean;
   pageSize?: number;
+  readOnly?: boolean;
 }
 
 const columnHelper = createColumnHelper<BomItem>();
@@ -56,6 +57,7 @@ export function BomTable({
   selectedItemId,
   loading = false,
   pageSize = 25,
+  readOnly = false,
 }: BomTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -302,6 +304,22 @@ export function BomTable({
         );
       },
     }),
+    columnHelper.accessor('isNewPart', {
+      header: 'Status',
+      cell: ({ row }) => {
+        const item = row.original;
+        if (!item.isNewPart) return null;
+        return (
+          <Badge 
+            variant="outline" 
+            className="text-xs border-[var(--accent-purple)] text-[var(--accent-purple)] bg-[var(--accent-purple)]/10"
+          >
+            <Sparkles className="h-3 w-3 mr-1" />
+            {item.newPartStatus || 'pending'}
+          </Badge>
+        );
+      },
+    }),
   ], []);
 
   const table = useReactTable({
@@ -332,7 +350,7 @@ export function BomTable({
         <Table>
           <TableHeader>
             <TableRow>
-              {['Assembly', 'Item Code', 'Description', 'Level', 'Qty', 'Material', 'Landing', 'Labour', 'Extended', 'Source'].map(header => (
+              {['Assembly', 'Item Code', 'Description', 'Level', 'Qty', 'Material', 'Landing', 'Labour', 'Extended', 'Source', 'Status'].map(header => (
                 <TableHead key={header}>{header}</TableHead>
               ))}
             </TableRow>
@@ -340,7 +358,7 @@ export function BomTable({
           <TableBody>
             {[1, 2, 3, 4, 5].map(i => (
               <TableRow key={i}>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(j => (
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(j => (
                   <TableCell key={j}>
                     <Skeleton className="h-4 w-full" />
                   </TableCell>
@@ -391,11 +409,13 @@ export function BomTable({
               <TableRow
                 key={row.id}
                 className={cn(
-                  'cursor-pointer transition-colors',
-                  'hover:bg-[var(--bg-tertiary)]',
-                  selectedItemId === row.original.id && 'bg-[var(--accent-blue)]/10'
+                  'transition-colors',
+                  !readOnly && 'cursor-pointer hover:bg-[var(--bg-tertiary)]',
+                  readOnly && 'cursor-default',
+                  selectedItemId === row.original.id && 'bg-[var(--accent-blue)]/10',
+                  row.original.isNewPart && 'bg-[var(--accent-purple)]/5'
                 )}
-                onClick={() => onItemClick?.(row.original)}
+                onClick={() => !readOnly && onItemClick?.(row.original)}
               >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id}>

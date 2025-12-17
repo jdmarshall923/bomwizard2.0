@@ -28,16 +28,46 @@ The complete import wizard system is now functional:
 - ✅ Import history tracking
 - ✅ Multi-step import wizard
 
-**Current Phase: UI Redesign** 🎨 **IN PROGRESS**
+**Phase 3: BOM Explorer** ✅ **COMPLETE**
 
-Modernizing the UI with:
-- 🎨 Card-based dashboard layouts inspired by modern financial apps
-- 🎨 Enhanced visual hierarchy and spacing
-- 🎨 Improved iconography and data visualization
-- 🎨 Better use of gradients and glass morphism
-- 🎨 More engaging and professional appearance
+Full BOM Explorer with tree/table views:
+- ✅ Tree view with expand/collapse assemblies
+- ✅ Table view with TanStack Table (sorting, pagination)
+- ✅ Real-time updates with Firestore onSnapshot
+- ✅ Search & filter system
+- ✅ Inline editing with optimistic updates
+- ✅ Item edit drawer with cost calculations
 
-**Next Phase: Phase 3 - BOM Explorer** 🚀
+**Phase 3.7/3.75: Batch Item Entry** ✅ **COMPLETE**
+
+Enhanced item entry workflow:
+- ✅ Batch add multiple items in one dialog
+- ✅ Inline group creation
+- ✅ Smart search vs placeholder detection
+- ✅ "New Part" and "Track" flags for design/procurement workflow
+- ✅ Per-item group selection
+
+**Phase 4: BOM Control Panel** ✅ **COMPLETE**
+
+Master-detail panel layout:
+- ✅ Template BOM panel (left) with cascading checkbox tree
+- ✅ Working BOM panel (right) with stats and editing
+- ✅ Transfer bar for copying items between panels
+- ✅ Duplicate detection and vendor price lookup
+- ✅ Batch transfer with landing cost calculation
+
+**Phase 5: Version Control** ✅ **COMPLETE**
+
+Comprehensive version control system:
+- ✅ Manual version snapshots with name/description
+- ✅ Auto-version on import and bulk operations (10+ items)
+- ✅ Version timeline with cost trend visualization
+- ✅ Compare any two versions with cost driver breakdown
+- ✅ Date range comparison across time periods
+- ✅ Cost trend charts and aggregated analysis
+- ✅ Changes grouped by driver and assembly
+
+**Next Phase: Phase 6 - Cost Analysis** 🚀
 
 ## Features
 
@@ -46,7 +76,7 @@ Modernizing the UI with:
 - **Cost Analysis**: Analyze BOM costs with visualizations and breakdowns
 - **Version Control**: Track all changes with visual diffs and version history
 - **Import Wizard**: Import CSV data from Infor with saved templates
-- **Quote Log**: Track quotes for new purchased parts
+- **New Part Tracker**: Track new parts through design, engineering, and procurement
 - **Manufacturing Log**: Track labour costs for manufactured items
 - **Master Data**: Manage items, vendors, contract prices, and landing rates
 
@@ -203,7 +233,7 @@ bom-wizard/
 │   ├── import/            # Import wizard components
 │   ├── charts/            # Chart components
 │   ├── versions/           # Version components
-│   └── quotes/            # Quote components
+│   └── quotes/            # New Part Tracker components
 ├── lib/                   # Utilities and helpers
 │   ├── firebase/          # Firebase configuration
 │   ├── hooks/             # Custom React hooks
@@ -264,7 +294,7 @@ firebase deploy --only functions
 
 ### Available Functions
 
-- **autoCreateQuote**: Automatically creates a quote when a new purchased part is added to the BOM
+- **autoCreateNewPart**: Automatically creates a New Part Tracker entry when a new part is flagged in the BOM
 - **createSnapshot**: Creates a version snapshot of the current BOM state
 - **calculateCosts**: Calculates cost rollups for a version
 
@@ -359,44 +389,60 @@ See `app/globals.css` for all design tokens and CSS variables.
 - [x] TypeScript interfaces for all data models
 - [x] Firebase security rules and indexes
 
-### Phase 2: Import System 🚀 NEXT
-- [ ] File upload component (to Firebase Storage)
-- [ ] CSV parser with papaparse
-- [ ] Template builder UI
-- [ ] Column mapping interface with preview
-- [ ] Firestore batch write for imports
-- [ ] Import history tracking
+### Phase 2: Import System ✅ COMPLETE
+- [x] File upload component (to Firebase Storage)
+- [x] CSV parser with papaparse
+- [x] Template builder UI
+- [x] Column mapping interface with preview
+- [x] Firestore batch write for imports
+- [x] Import history tracking
 
-### Phase 3: BOM Explorer (Planned)
-- [ ] Tree view component with expand/collapse
-- [ ] Table view with TanStack Table
-- [ ] Real-time updates with onSnapshot
-- [ ] Search & filter system
-- [ ] Inline editing with optimistic updates
-- [ ] Assembly/Item detail panels
+### Phase 3: BOM Explorer ✅ COMPLETE
+- [x] Tree view component with expand/collapse
+- [x] Table view with TanStack Table
+- [x] Real-time updates with onSnapshot
+- [x] Search & filter system
+- [x] Inline editing with optimistic updates
+- [x] Assembly/Item detail panels
 
-### Phase 4: Version Control (Planned)
-- [ ] Cloud Function for snapshot creation
-- [ ] Version timeline component
-- [ ] Diff algorithm (compare two versions)
-- [ ] Change categorization logic
-- [ ] Side-by-side comparison UI
+### Phase 3.7/3.75: Batch Item Entry ✅ COMPLETE
+- [x] Batch add dialog for multiple items
+- [x] Inline group creation
+- [x] Smart search vs placeholder detection
+- [x] "New Part" and "Track" flags
+- [x] Per-item group selection
+- [x] Simplified UI (Phase 3.75)
 
-### Phase 5: Cost Analysis (Planned)
+### Phase 4: BOM Control Panel ✅ COMPLETE
+- [x] Master-detail layout (Template BOM / Working BOM)
+- [x] Cascading checkbox tree for selection
+- [x] Transfer bar for copying items
+- [x] Duplicate detection
+- [x] Vendor price lookup and landing cost calculation
+
+### Phase 5: Version Control ✅ COMPLETE
+- [x] Version service for snapshot CRUD
+- [x] Version timeline component
+- [x] Diff algorithm with cost driver detection
+- [x] Change categorization by driver and assembly
+- [x] Date range comparison view
+- [x] Auto-version on import/bulk operations
+
+### Phase 6: Cost Analysis (Planned)
 - [ ] Dashboard summary cards
 - [ ] Cost breakdown by assembly (Recharts)
 - [ ] Trend chart over versions
 - [ ] Cloud Function for cost rollup calculations
 - [ ] Export to PDF/Excel
 
-### Phase 6: Quote & Manufacturing Logs (Planned)
-- [ ] Quote management CRUD
-- [ ] Kanban view component
-- [ ] Cloud Function: auto-create quote on new part
-- [ ] Cloud Function: update costs when quote approved
+### Phase 7: New Part Tracker & Manufacturing Logs (Planned)
+- [ ] New Part Tracker CRUD (Added → Design → Engineering → Procurement → Complete)
+- [ ] Kanban view component for part lifecycle
+- [ ] Cloud Function: auto-create NewPart when flagged in BOM
+- [ ] Cloud Function: update BomItem when part complete (assign final B-code)
 - [ ] Manufacturing cost tracking
 
-### Phase 7: Polish & Launch (Planned)
+### Phase 8: Polish & Launch (Planned)
 - [ ] Performance optimization (pagination, virtualization)
 - [ ] Error handling & loading states
 - [ ] Firestore security rules audit
@@ -408,21 +454,22 @@ See `app/globals.css` for all design tokens and CSS variables.
 
 To continue development:
 
-1. **Start Phase 2: Import System**
-   - Implement file upload to Firebase Storage
-   - Build CSV parsing with PapaParse
-   - Create template management UI
-   - Add column mapping interface
+1. **Start Phase 5: Version Control**
+   - Implement Cloud Function for snapshot creation
+   - Build version timeline component
+   - Create diff algorithm to compare versions
+   - Add change categorization logic
+   - Build side-by-side comparison UI
 
 2. **Test Current Features**
-   - Create test projects
-   - Verify authentication flow
-   - Test project creation and navigation
+   - Test BOM Control Panel with real data
+   - Verify transfer logic and duplicate detection
+   - Test batch item entry workflow
 
-3. **Prepare for BOM Data**
-   - Set up sample BOM data structure
-   - Test Firestore queries
-   - Verify real-time updates
+3. **Future Phases**
+   - Phase 6: Cost Analysis dashboards
+   - Phase 7: New Part Tracker & Manufacturing Logs
+   - Phase 8: Polish & Launch
 
 ## Firebase Collections Setup
 
@@ -437,5 +484,5 @@ For issues and questions, please [create an issue](link-to-issues) or contact th
 ---
 
 **Last Updated**: December 2024  
-**Current Version**: 0.1.0  
-**Status**: Phase 1 Complete - Ready for Phase 2
+**Current Version**: 0.5.0  
+**Status**: Phase 5 Complete - Ready for Phase 6 (Cost Analysis)

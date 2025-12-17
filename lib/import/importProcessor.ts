@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase/config';
 import { transformData, ColumnMappings } from './columnMapper';
 import { getDocument, createDocument } from '@/lib/firebase/firestore';
 import { Item } from '@/types';
+import { createVersion, generateTriggerDetails } from '@/lib/bom/versionService';
 
 export interface ImportOptions {
   createVersion?: boolean;
@@ -284,69 +285,31 @@ async function batchWriteBomItems(
 }
 
 /**
- * Create a version snapshot after import
+ * Create a version snapshot after import using the new version service
  */
 async function createVersionSnapshot(
   projectId: string,
   items: BomItem[],
-  userId: string
-): Promise<string> {
-  // Calculate totals
-  const totals = items.reduce(
-    (acc, item) => ({
-      totalCost: acc.totalCost + item.extendedCost,
-      materialCost: acc.materialCost + item.materialCost * item.quantity,
-      landingCost: acc.landingCost + item.landingCost * item.quantity,
-      labourCost: acc.labourCost + item.labourCost * item.quantity,
-    }),
-    { totalCost: 0, materialCost: 0, landingCost: 0, labourCost: 0 }
-  );
-
-  // Get latest version number
-  const { getDocs, query, orderBy, limit } = await import('firebase/firestore');
-  const versionsRef = collection(db, `projects/${projectId}/versions`);
-  const versionsQuery = query(versionsRef, orderBy('versionNumber', 'desc'), limit(1));
-  const versionsSnapshot = await getDocs(versionsQuery);
-
-  const nextVersionNumber = versionsSnapshot.empty
-    ? 1
-    : (versionsSnapshot.docs[0].data().versionNumber || 0) + 1;
-
-  // Create version document
-  const versionId = await createDocument(
-    `projects/${projectId}/versions`,
-    {
-      versionNumber: nextVersionNumber,
-      snapshotDate: Timestamp.now(),
-      changeNote: `Import: ${items.length} items`,
-      ...totals,
+  userId: string,
+  fileName?: string
+): Promise<string | undefined> {
+  const result = await createVersion(projectId, {
+    trigger: 'import',
+    triggerDetails: generateTriggerDetails('import', {
       itemCount: items.length,
-      assemblyCount: new Set(items.map((i) => i.assemblyCode)).size,
-      createdBy: userId,
-    }
-  );
+      fileName,
+    }),
+    versionName: fileName ? `Import: ${fileName}` : 'CSV Import',
+    description: `Imported ${items.length} items from CSV`,
+    userId,
+  });
 
-  // Copy BOM items to version subcollection
-  const versionItemsRef = collection(
-    db,
-    `projects/${projectId}/versions/${versionId}/bomItems`
-  );
-
-  // Write in batches
-  const BATCH_SIZE = 500;
-  for (let i = 0; i < items.length; i += BATCH_SIZE) {
-    const batch = writeBatch(db);
-    const batchItems = items.slice(i, i + BATCH_SIZE);
-
-    batchItems.forEach((item) => {
-      const itemRef = doc(versionItemsRef);
-      batch.set(itemRef, item);
-    });
-
-    await batch.commit();
+  if (!result.success) {
+    console.error('Failed to create version after import:', result.error);
+    return undefined;
   }
 
-  return versionId;
+  return result.versionId;
 }
 
 /**

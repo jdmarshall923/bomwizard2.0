@@ -33,8 +33,8 @@ const trackingNavigation = [
 ];
 
 const masterDataNavigation = [
-  { name: 'Items Master', href: '/data/items', icon: Package },
-  { name: 'Vendors', href: '/data/vendors', icon: Building2 },
+  { name: 'SLItems', href: '/data/sl-items', icon: Package },
+  { name: 'SLVendors', href: '/data/sl-vendors', icon: Building2 },
 ];
 
 const SIDEBAR_STORAGE_KEY = 'bom-wizard-sidebar-collapsed';

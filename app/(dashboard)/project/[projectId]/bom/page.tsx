@@ -1,77 +1,165 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useState, useMemo, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BomTree } from '@/components/bom/BomTree';
-import { BomTable } from '@/components/bom/BomTable';
-import { BomFilters } from '@/components/bom/BomFilters';
+import { TemplateBomPanel } from '@/components/bom/TemplateBomPanel';
+import { WorkingBomPanel } from '@/components/bom/WorkingBomPanel';
+import { BomTransferBar } from '@/components/bom/BomTransferBar';
 import { ItemEditDrawer } from '@/components/bom/ItemEditDrawer';
-import { useBom } from '@/lib/hooks/useBom';
-import type { BomFilters as BomFiltersType } from '@/lib/hooks/useBom';
-import type { BomItem } from '@/types';
+import { AddGroupDialog } from '@/components/bom/AddGroupDialog';
+import { BatchAddItemsDialog } from '@/components/bom/BatchAddItemsDialog';
+import { useBom, useTemplateBom } from '@/lib/hooks/useBom';
+import { transferItemsToWorkingBom, getDuplicateCount } from '@/lib/bom/transferService';
+import { applyVendorPricesToBom } from '@/lib/bom/vendorPriceService';
+import { getBomGroups } from '@/lib/bom/templateBomService';
+import { useAuth } from '@/lib/hooks/useAuth';
+import type { BomItem, BomGroup, TemplateBomItem } from '@/types';
 import { 
-  TreePine, 
-  Table as TableIcon, 
-  Package,
-  Boxes,
-  PoundSterling,
-  Sparkles,
   AlertCircle,
-  TrendingUp,
-  Download,
+  RefreshCw,
+  Settings2,
+  FileBox,
   Plus,
-  RefreshCw
+  Wrench,
+  Import,
+  History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type ViewMode = 'tree' | 'table';
-
-const defaultFilters: BomFiltersType = {
-  searchTerm: '',
-  showNewParts: false,
-  showPlaceholders: false,
-  showCostChanges: false,
-  assemblyCode: null,
-  costSource: null,
-};
-
-export default function BomExplorerPage() {
+export default function BomControlPanelPage() {
   const params = useParams();
   const projectId = params?.projectId as string;
+  const { user } = useAuth();
 
-  // State
-  const [viewMode, setViewMode] = useState<ViewMode>('tree');
-  const [filters, setFilters] = useState<BomFiltersType>(defaultFilters);
-  const [selectedItem, setSelectedItem] = useState<BomItem | null>(null);
+  // Selection state
+  const [selectedTemplateItems, setSelectedTemplateItems] = useState<Set<string>>(new Set());
+  const [selectedWorkingItem, setSelectedWorkingItem] = useState<BomItem | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  // Fetch BOM data
+  // Dialog state
+  const [isAddItemsOpen, setIsAddItemsOpen] = useState(false);
+  const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
+
+  // Transfer state
+  const [transferring, setTransferring] = useState(false);
+  const [transferResult, setTransferResult] = useState<{
+    success: boolean;
+    transferred: number;
+    skipped: number;
+    message?: string;
+  } | null>(null);
+  const [duplicateCount, setDuplicateCount] = useState(0);
+
+  // Pricing state
+  const [applyingPrices, setApplyingPrices] = useState(false);
+
+  // BOM groups state
+  const [bomGroups, setBomGroups] = useState<BomGroup[]>([]);
+
+  // Fetch Working BOM data
   const { 
     bomItems, 
     assemblies, 
-    loading, 
-    error,
+    loading: workingLoading, 
+    error: workingError,
     updateBomItem,
-    stats,
-    filterItems,
-    getAssemblyCodes,
+    deleteBomItem,
+    stats: workingStats,
+    filterItems: filterWorkingItems,
+    getAssemblyCodes: getWorkingAssemblyCodes,
   } = useBom(projectId);
 
+  // Fetch Template BOM data
+  const {
+    templateItems,
+    loading: templateLoading,
+    error: templateError,
+    hasTemplate,
+  } = useTemplateBom(projectId);
+
+  // Load BOM groups
+  useEffect(() => {
+    if (projectId && hasTemplate) {
+      getBomGroups(projectId).then(setBomGroups).catch(console.error);
+    }
+  }, [projectId, hasTemplate]);
+
+  // Check for duplicates when selection changes
+  useEffect(() => {
+    if (selectedTemplateItems.size > 0 && templateItems.length > 0) {
+      getDuplicateCount(projectId, templateItems, Array.from(selectedTemplateItems))
+        .then(setDuplicateCount)
+        .catch(console.error);
+    } else {
+      setDuplicateCount(0);
+    }
+  }, [selectedTemplateItems, templateItems, projectId]);
+
   // Get assembly codes for filter
-  const assemblyCodes = useMemo(() => getAssemblyCodes(), [getAssemblyCodes]);
+  const assemblyCodes = useMemo(() => {
+    return getWorkingAssemblyCodes();
+  }, [getWorkingAssemblyCodes]);
 
-  // Filter items
-  const filteredItems = useMemo(() => {
-    return filterItems(filters);
-  }, [filterItems, filters]);
+  // Handle transfer from template to working BOM
+  const handleTransfer = useCallback(async () => {
+    if (selectedTemplateItems.size === 0 || !user) return;
+    
+    setTransferring(true);
+    setTransferResult(null);
 
-  // Handle item click
-  const handleItemClick = useCallback((item: BomItem) => {
-    setSelectedItem(item);
+    try {
+      const result = await transferItemsToWorkingBom(
+        projectId,
+        templateItems,
+        Array.from(selectedTemplateItems),
+        true, // Apply pricing
+        user.uid,
+        user.displayName || user.email || undefined
+      );
+
+      setTransferResult({
+        success: result.success,
+        transferred: result.transferred,
+        skipped: result.skipped,
+        message: result.versionCreated 
+          ? `Version ${result.versionNumber} created` 
+          : undefined,
+      });
+
+      // Clear selection after successful transfer
+      if (result.success && result.transferred > 0) {
+        setSelectedTemplateItems(new Set());
+      }
+    } catch (err) {
+      console.error('Transfer failed:', err);
+      setTransferResult({
+        success: false,
+        transferred: 0,
+        skipped: 0,
+        message: 'Transfer failed',
+      });
+    } finally {
+      setTransferring(false);
+    }
+  }, [selectedTemplateItems, templateItems, projectId, user]);
+
+  // Clear selection
+  const handleClearSelection = useCallback(() => {
+    setSelectedTemplateItems(new Set());
+    setTransferResult(null);
+  }, []);
+
+  // Dismiss transfer result
+  const handleDismissResult = useCallback(() => {
+    setTransferResult(null);
+  }, []);
+
+  // Handle working item click
+  const handleWorkingItemClick = useCallback((item: BomItem) => {
+    setSelectedWorkingItem(item);
     setIsDrawerOpen(true);
   }, []);
 
@@ -80,19 +168,65 @@ export default function BomExplorerPage() {
     await updateBomItem(itemId, updates);
   }, [updateBomItem]);
 
+  // Handle delete
+  const handleDeleteItem = useCallback(async (itemId: string) => {
+    if (confirm('Are you sure you want to delete this item?')) {
+      try {
+        await deleteBomItem(itemId);
+        setIsDrawerOpen(false);
+        setSelectedWorkingItem(null);
+      } catch (err) {
+        console.error('Error deleting item:', err);
+      }
+    }
+  }, [deleteBomItem]);
+
   // Handle drawer close
   const handleDrawerClose = useCallback(() => {
     setIsDrawerOpen(false);
-    setTimeout(() => setSelectedItem(null), 300);
+    setTimeout(() => setSelectedWorkingItem(null), 300);
   }, []);
 
+  // Handle group added
+  const handleGroupAdded = (group: BomGroup) => {
+    setBomGroups(prev => [...prev, group]);
+  };
+
+  // Handle add items result
+  const handleAddItemsResult = (result: { 
+    itemsCreated: number; 
+    newPartsCount: number; 
+    groupCreated?: BomGroup;
+  }) => {
+    // Add new group to state if created
+    if (result.groupCreated) {
+      setBomGroups(prev => [...prev, result.groupCreated!]);
+    }
+    // Note: Items will be automatically refreshed via useBom hook
+    console.log(`Added ${result.itemsCreated} items (${result.newPartsCount} new parts)`);
+  };
+
+  // Handle apply vendor prices
+  const handleApplyVendorPrices = async () => {
+    setApplyingPrices(true);
+    try {
+      await applyVendorPricesToBom(projectId);
+    } catch (err) {
+      console.error('Error applying vendor prices:', err);
+    } finally {
+      setApplyingPrices(false);
+    }
+  };
+
+  // Error state
+  const error = workingError || templateError;
   if (error) {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">BOM Explorer</h1>
+          <h1 className="text-3xl font-bold">BOM Control Panel</h1>
           <p className="text-[var(--text-secondary)] mt-1">
-            View and edit BOM data with hierarchical structure
+            Manage your Bill of Materials
           </p>
         </div>
         <Card className="border-[var(--accent-red)]/30 bg-[var(--accent-red)]/5">
@@ -103,11 +237,6 @@ export default function BomExplorerPage() {
               <p className="text-sm text-[var(--text-secondary)] max-w-md mb-4">
                 {error.message || 'An unexpected error occurred'}
               </p>
-              {error.message?.includes('index') && (
-                <p className="text-xs text-[var(--text-tertiary)] mb-4">
-                  This error usually means a Firestore index needs to be created. Check the console for a link.
-                </p>
-              )}
               <Button variant="outline" onClick={() => window.location.reload()}>
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Retry
@@ -119,222 +248,158 @@ export default function BomExplorerPage() {
     );
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
+  // No template state
+  if (!templateLoading && !hasTemplate && bomItems.length === 0) {
+    return (
+      <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold">BOM Explorer</h1>
+          <h1 className="text-3xl font-bold">BOM Control Panel</h1>
           <p className="text-[var(--text-secondary)] mt-1">
-            View and edit BOM data with hierarchical structure
+            Manage your Bill of Materials
+          </p>
+        </div>
+        <Card className="border-[var(--accent-orange)]/30 bg-[var(--accent-orange)]/5">
+          <CardContent className="p-6">
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <FileBox className="h-16 w-16 text-[var(--accent-orange)] mb-4" />
+              <h3 className="text-xl font-medium text-[var(--text-primary)] mb-2">No BOM Data</h3>
+              <p className="text-sm text-[var(--text-secondary)] max-w-md mb-6">
+                Import a BOM from Infor to get started. The import will create a Template BOM 
+                that you can then use to build your Working BOM.
+              </p>
+              <Button 
+                onClick={() => window.location.href = `/project/${projectId}/import`}
+                className="bg-[var(--accent-blue)] hover:bg-[var(--accent-blue)]/90"
+              >
+                <Import className="h-4 w-4 mr-2" />
+                Import BOM
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h1 className="text-2xl font-bold">BOM Control Panel</h1>
+          <p className="text-[var(--text-secondary)] text-sm mt-0.5">
+            Select items from Template BOM to build your Working BOM
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Export
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => window.location.href = `/project/${projectId}/versions`}
+          >
+            <History className="h-4 w-4 mr-2" />
+            Version History
           </Button>
-          <Button size="sm" className="bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)]">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Item
-          </Button>
+          {hasTemplate && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => window.location.href = `/project/${projectId}/configure`}
+            >
+              <Settings2 className="h-4 w-4 mr-2" />
+              Configure Groups
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <Card className="bg-[var(--bg-secondary)]/50 border-[var(--border-subtle)]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-[var(--accent-blue)]/10">
-                <Package className="h-5 w-5 text-[var(--accent-blue)]" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold">
-                  {loading ? <Skeleton className="h-8 w-12" /> : stats?.totalItems || 0}
+      {/* Main content - Master Detail Layout */}
+      <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 grid grid-cols-12 gap-4 min-h-0">
+          {/* Left Panel - Template BOM */}
+          <div className="col-span-4 min-h-0">
+            <Card className="h-full border-[var(--accent-blue)]/20 overflow-hidden">
+              {templateLoading ? (
+                <div className="h-full p-4 space-y-4">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
                 </div>
-                <div className="text-xs text-[var(--text-secondary)]">Total Items</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[var(--bg-secondary)]/50 border-[var(--border-subtle)]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-[var(--accent-blue)]/10">
-                <Boxes className="h-5 w-5 text-[var(--accent-blue)]" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold">
-                  {loading ? <Skeleton className="h-8 w-12" /> : stats?.totalAssemblies || 0}
-                </div>
-                <div className="text-xs text-[var(--text-secondary)]">Assemblies</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[var(--bg-secondary)]/50 border-[var(--border-subtle)]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-[var(--accent-green)]/10">
-                <PoundSterling className="h-5 w-5 text-[var(--accent-green)]" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-[var(--accent-green)]">
-                  {loading ? (
-                    <Skeleton className="h-8 w-20" />
-                  ) : (
-                    `£${(stats?.totalCost || 0).toLocaleString('en-GB', { maximumFractionDigits: 0 })}`
-                  )}
-                </div>
-                <div className="text-xs text-[var(--text-secondary)]">Total Cost</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[var(--bg-secondary)]/50 border-[var(--border-subtle)]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-[var(--accent-blue)]/10">
-                <Sparkles className="h-5 w-5 text-[var(--accent-blue)]" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-[var(--accent-blue)]">
-                  {loading ? <Skeleton className="h-8 w-12" /> : stats?.newPartsCount || 0}
-                </div>
-                <div className="text-xs text-[var(--text-secondary)]">New Parts</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[var(--bg-secondary)]/50 border-[var(--border-subtle)]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-[var(--accent-orange)]/10">
-                <AlertCircle className="h-5 w-5 text-[var(--accent-orange)]" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-[var(--accent-orange)]">
-                  {loading ? <Skeleton className="h-8 w-12" /> : stats?.placeholdersCount || 0}
-                </div>
-                <div className="text-xs text-[var(--text-secondary)]">Placeholders</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[var(--bg-secondary)]/50 border-[var(--border-subtle)]">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-[var(--accent-green)]/10">
-                <TrendingUp className="h-5 w-5 text-[var(--accent-green)]" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold">
-                  {loading ? (
-                    <Skeleton className="h-8 w-20" />
-                  ) : (
-                    `£${(stats?.materialCost || 0).toLocaleString('en-GB', { maximumFractionDigits: 0 })}`
-                  )}
-                </div>
-                <div className="text-xs text-[var(--text-secondary)]">Material Cost</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters and View Toggle */}
-      <Card className="bg-[var(--bg-secondary)]/50 border-[var(--border-subtle)]">
-        <CardContent className="p-4">
-          <div className="flex flex-col lg:flex-row lg:items-start gap-4">
-            {/* Filters */}
-            <div className="flex-1">
-              <BomFilters
-                filters={filters}
-                onFiltersChange={setFilters}
-                assemblyCodes={assemblyCodes}
-                itemCount={bomItems.length}
-                filteredCount={filteredItems.length}
-              />
-            </div>
-
-            {/* View Toggle */}
-            <div className="flex items-center gap-2">
-              <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-                <TabsList className="bg-[var(--bg-tertiary)]">
-                  <TabsTrigger 
-                    value="tree" 
-                    className={cn(
-                      'data-[state=active]:bg-[var(--accent-blue)] data-[state=active]:text-white'
-                    )}
-                  >
-                    <TreePine className="h-4 w-4 mr-2" />
-                    Tree
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    value="table"
-                    className={cn(
-                      'data-[state=active]:bg-[var(--accent-blue)] data-[state=active]:text-white'
-                    )}
-                  >
-                    <TableIcon className="h-4 w-4 mr-2" />
-                    Table
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
+              ) : (
+                <TemplateBomPanel
+                  items={templateItems}
+                  loading={templateLoading}
+                  selectedItems={selectedTemplateItems}
+                  onSelectionChange={setSelectedTemplateItems}
+                />
+              )}
+            </Card>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* BOM Content */}
-      <Card className="bg-[var(--bg-secondary)]/50 border-[var(--border-subtle)]">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg flex items-center gap-2">
-            {viewMode === 'tree' ? (
-              <>
-                <TreePine className="h-5 w-5 text-[var(--accent-blue)]" />
-                BOM Tree View
-              </>
-            ) : (
-              <>
-                <TableIcon className="h-5 w-5 text-[var(--accent-blue)]" />
-                BOM Table View
-              </>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {viewMode === 'tree' ? (
-            <BomTree
-              items={filteredItems}
-              assemblies={assemblies}
-              onItemClick={handleItemClick}
-              selectedItemId={selectedItem?.id}
-              loading={loading}
+          {/* Right Panel - Working BOM */}
+          <div className="col-span-8 min-h-0">
+            <Card className="h-full border-[var(--accent-green)]/20 overflow-hidden">
+              <WorkingBomPanel
+                items={bomItems}
+                assemblies={assemblies}
+                loading={workingLoading}
+                stats={workingStats || undefined}
+                onItemClick={handleWorkingItemClick}
+                onAddItems={() => setIsAddItemsOpen(true)}
+                onAddGroup={() => setIsAddGroupOpen(true)}
+                onApplyPrices={handleApplyVendorPrices}
+                applyingPrices={applyingPrices}
+                selectedItemId={selectedWorkingItem?.id}
+                assemblyCodes={assemblyCodes}
+                filterItems={filterWorkingItems}
+              />
+            </Card>
+          </div>
+        </div>
+
+        {/* Transfer Bar */}
+        <div className="mt-4">
+          <Card className="border-[var(--border-subtle)]">
+            <BomTransferBar
+              selectedCount={selectedTemplateItems.size}
+              duplicateCount={duplicateCount}
+              onTransfer={handleTransfer}
+              onClear={handleClearSelection}
+              transferring={transferring}
+              lastTransferResult={transferResult}
+              onDismissResult={handleDismissResult}
             />
-          ) : (
-            <BomTable
-              items={filteredItems}
-              onItemClick={handleItemClick}
-              selectedItemId={selectedItem?.id}
-              loading={loading}
-            />
-          )}
-        </CardContent>
-      </Card>
+          </Card>
+        </div>
+      </div>
 
       {/* Item Edit Drawer */}
       <ItemEditDrawer
-        item={selectedItem}
+        item={selectedWorkingItem}
         open={isDrawerOpen}
         onClose={handleDrawerClose}
         onSave={handleSave}
+        onDelete={handleDeleteItem}
+      />
+
+      {/* Add Group Dialog */}
+      <AddGroupDialog
+        open={isAddGroupOpen}
+        onOpenChange={setIsAddGroupOpen}
+        projectId={projectId}
+        existingGroups={bomGroups}
+        onGroupAdded={handleGroupAdded}
+      />
+
+      {/* Add Items Dialog */}
+      <BatchAddItemsDialog
+        open={isAddItemsOpen}
+        onOpenChange={setIsAddItemsOpen}
+        projectId={projectId}
+        groups={bomGroups}
+        existingItems={bomItems}
+        onItemsAdded={handleAddItemsResult}
       />
     </div>
   );

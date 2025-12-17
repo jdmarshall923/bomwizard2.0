@@ -34,9 +34,21 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
     
+    // SLItems - Infor master data (separate from BOM items)
+    match /slItems/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
     // Vendors - all authenticated users
     match /vendors/{vendorId} {
       allow read, write: if isAuthenticated();
+    }
+    
+    // SLVendors - Infor master data (separate from project vendors)
+    match /slVendors/{vendorId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
     }
     
     // Import templates - all authenticated users
@@ -47,6 +59,12 @@ service cloud.firestore {
     
     // Contract prices - all authenticated users
     match /contractPrices/{priceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Vendor contract prices - Infor pricing data
+    match /vendorContractPrices/{priceId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }

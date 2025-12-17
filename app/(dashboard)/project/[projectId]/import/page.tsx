@@ -16,14 +16,20 @@ import { getTemplates, getTemplate, createTemplate } from '@/lib/import/template
 import { ImportTemplate } from '@/types';
 import { ColumnMappings, autoDetectMappings, validateMappings } from '@/lib/import/columnMapper';
 import { processImport, validateBomData } from '@/lib/import/importProcessor';
+import { importToTemplateBom, createWorkingBomFromTemplate, saveAsGlobalTemplate } from '@/lib/bom/templateBomService';
 import { uploadFile } from '@/lib/firebase/storage';
 import { createDocument } from '@/lib/firebase/firestore';
 import { ImportHistory } from '@/types';
-import { CheckCircle2, XCircle, AlertCircle, Loader2, Trash2 } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertCircle, Loader2, Trash2, FileBox, Wrench, Globe, ArrowRight, Copy, Save } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Timestamp } from 'firebase/firestore';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
-type ImportStep = 'upload' | 'template' | 'mapping' | 'preview' | 'validation' | 'import' | 'results';
+type ImportStep = 'upload' | 'template' | 'mapping' | 'preview' | 'destination' | 'validation' | 'import' | 'results';
+type ImportDestination = 'template' | 'working' | 'both';
 
 export default function ImportPage() {
   const params = useParams();
@@ -39,6 +45,10 @@ export default function ImportPage() {
   const [templates, setTemplates] = useState<ImportTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [mappings, setMappings] = useState<ColumnMappings>({});
+  const [importDestination, setImportDestination] = useState<ImportDestination>('template');
+  const [saveToGlobal, setSaveToGlobal] = useState(false);
+  const [globalTemplateName, setGlobalTemplateName] = useState('');
+  const [globalTemplateDescription, setGlobalTemplateDescription] = useState('');
   const [importOptions, setImportOptions] = useState({
     createVersion: true,
     replaceExisting: false,
@@ -46,6 +56,8 @@ export default function ImportPage() {
   });
   const [validationResult, setValidationResult] = useState<any>(null);
   const [importResult, setImportResult] = useState<any>(null);
+  const [workingBomResult, setWorkingBomResult] = useState<any>(null);
+  const [globalTemplateResult, setGlobalTemplateResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -163,6 +175,8 @@ export default function ImportPage() {
         setError(`Please map all required fields: ${validation.missing.join(', ')}`);
       }
     } else if (currentStep === 'preview') {
+      setCurrentStep('destination');
+    } else if (currentStep === 'destination') {
       setCurrentStep('validation');
       validateData();
     } else if (currentStep === 'validation') {
@@ -174,10 +188,14 @@ export default function ImportPage() {
   const handleBack = () => {
     if (currentStep === 'template') {
       setCurrentStep('upload');
-    } else if (currentStep === 'mapping' || currentStep === 'preview') {
+    } else if (currentStep === 'mapping') {
       setCurrentStep('template');
-    } else if (currentStep === 'validation') {
+    } else if (currentStep === 'preview') {
+      setCurrentStep('template');
+    } else if (currentStep === 'destination') {
       setCurrentStep('preview');
+    } else if (currentStep === 'validation') {
+      setCurrentStep('destination');
     }
   };
 
@@ -215,14 +233,48 @@ export default function ImportPage() {
         });
       }
 
-      // Process import
-      const result = await processImport(
-        projectId,
-        csvData,
-        mappings,
-        importOptions,
-        user.uid
-      );
+      let result: any;
+      let workingResult: any = null;
+      let globalResult: any = null;
+
+      // Import based on destination choice
+      if (importDestination === 'template' || importDestination === 'both') {
+        // Import to Template BOM (new flow)
+        result = await importToTemplateBom(
+          projectId,
+          csvData,
+          mappings,
+          { createMissingItems: importOptions.createMissingItems },
+          user.uid,
+          selectedFile?.name || 'unknown'
+        );
+
+        // If 'both' selected, also create working BOM from template
+        if (importDestination === 'both' && result.success) {
+          workingResult = await createWorkingBomFromTemplate(projectId, user.uid);
+          setWorkingBomResult(workingResult);
+        }
+
+        // Save to global templates if requested
+        if (saveToGlobal && result.success && globalTemplateName) {
+          globalResult = await saveAsGlobalTemplate(
+            projectId,
+            globalTemplateName,
+            globalTemplateDescription,
+            user.uid
+          );
+          setGlobalTemplateResult(globalResult);
+        }
+      } else {
+        // Import directly to Working BOM (legacy flow - skip template)
+        result = await processImport(
+          projectId,
+          csvData,
+          mappings,
+          importOptions,
+          user.uid
+        );
+      }
 
       setImportResult(result);
 
@@ -240,7 +292,8 @@ export default function ImportPage() {
             importedAt: Timestamp.now(),
             importedBy: user.uid,
             versionId: result.versionId || '',
-          } as Omit<ImportHistory, 'id'>
+            importDestination, // Track which destination was used
+          } as Omit<ImportHistory, 'id'> & { importDestination: string }
         );
       }
 
@@ -298,38 +351,59 @@ export default function ImportPage() {
       </div>
 
       {/* Step Indicator */}
-      <div className="flex items-center gap-2 mb-6">
-        {(['upload', 'template', 'mapping', 'preview', 'validation', 'import'] as ImportStep[]).map(
-          (step, index) => (
-            <div key={step} className="flex items-center">
-              <div
-                className={`
-                  h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium
-                  ${
-                    currentStep === step
-                      ? 'bg-[var(--accent-blue)] text-white'
-                      : index < ['upload', 'template', 'mapping', 'preview', 'validation', 'import'].indexOf(currentStep)
-                      ? 'bg-[var(--accent-green)] text-white'
-                      : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
-                  }
-                `}
-              >
-                {index + 1}
+      <div className="flex items-center gap-1 mb-6 overflow-x-auto pb-2">
+        {(['upload', 'template', 'mapping', 'preview', 'destination', 'validation', 'import'] as ImportStep[]).map(
+          (step, index) => {
+            const stepLabels: Record<ImportStep, string> = {
+              upload: 'Upload',
+              template: 'Template',
+              mapping: 'Mapping',
+              preview: 'Preview',
+              destination: 'Destination',
+              validation: 'Validate',
+              import: 'Import',
+              results: 'Results',
+            };
+            const allSteps: ImportStep[] = ['upload', 'template', 'mapping', 'preview', 'destination', 'validation', 'import'];
+            const currentIndex = allSteps.indexOf(currentStep);
+            const stepIndex = allSteps.indexOf(step);
+            
+            return (
+              <div key={step} className="flex items-center">
+                <div className="flex flex-col items-center">
+                  <div
+                    className={`
+                      h-8 w-8 rounded-full flex items-center justify-center text-sm font-medium
+                      ${
+                        currentStep === step
+                          ? 'bg-[var(--accent-blue)] text-white'
+                          : stepIndex < currentIndex
+                          ? 'bg-[var(--accent-green)] text-white'
+                          : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
+                      }
+                    `}
+                  >
+                    {index + 1}
+                  </div>
+                  <span className="text-[10px] text-[var(--text-secondary)] mt-1 whitespace-nowrap">
+                    {stepLabels[step]}
+                  </span>
+                </div>
+                {index < 6 && (
+                  <div
+                    className={`
+                      w-8 h-0.5 mx-1
+                      ${
+                        stepIndex < currentIndex
+                          ? 'bg-[var(--accent-green)]'
+                          : 'bg-[var(--border-subtle)]'
+                      }
+                    `}
+                  />
+                )}
               </div>
-              {index < 5 && (
-                <div
-                  className={`
-                    w-16 h-0.5
-                    ${
-                      index < ['upload', 'template', 'mapping', 'preview', 'validation', 'import'].indexOf(currentStep)
-                        ? 'bg-[var(--accent-green)]'
-                        : 'bg-[var(--border-subtle)]'
-                    }
-                  `}
-                />
-              )}
-            </div>
-          )
+            );
+          }
         )}
       </div>
 
@@ -382,57 +456,6 @@ export default function ImportPage() {
 
           {currentStep === 'preview' && csvData.length > 0 && (
             <div className="space-y-4">
-              {/* Import Options */}
-              <div className="p-4 bg-[var(--bg-tertiary)] rounded-lg border border-[var(--border-subtle)]">
-                <h3 className="font-medium mb-3">Import Options</h3>
-                <div className="space-y-3">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <Checkbox
-                      checked={importOptions.replaceExisting}
-                      onCheckedChange={(checked) => 
-                        setImportOptions(prev => ({ ...prev, replaceExisting: checked === true }))
-                      }
-                    />
-                    <div>
-                      <span className="text-sm font-medium text-[var(--accent-red)]">
-                        Delete existing BOM data before import
-                      </span>
-                      <p className="text-xs text-[var(--text-secondary)]">
-                        This will remove all current BOM items and replace with imported data
-                      </p>
-                    </div>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <Checkbox
-                      checked={importOptions.createVersion}
-                      onCheckedChange={(checked) => 
-                        setImportOptions(prev => ({ ...prev, createVersion: checked === true }))
-                      }
-                    />
-                    <div>
-                      <span className="text-sm font-medium">Create version snapshot</span>
-                      <p className="text-xs text-[var(--text-secondary)]">
-                        Save a snapshot of this import for version history
-                      </p>
-                    </div>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <Checkbox
-                      checked={importOptions.createMissingItems}
-                      onCheckedChange={(checked) => 
-                        setImportOptions(prev => ({ ...prev, createMissingItems: checked === true }))
-                      }
-                    />
-                    <div>
-                      <span className="text-sm font-medium">Create missing items</span>
-                      <p className="text-xs text-[var(--text-secondary)]">
-                        Automatically create new items in the global catalog if they don't exist
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
               <Tabs defaultValue="raw" className="w-full">
                 <TabsList>
                   <TabsTrigger value="raw">Raw Data</TabsTrigger>
@@ -455,6 +478,166 @@ export default function ImportPage() {
                   />
                 </TabsContent>
               </Tabs>
+            </div>
+          )}
+
+          {currentStep === 'destination' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-medium mb-2">Import Destination</h3>
+                <p className="text-sm text-[var(--text-secondary)]">
+                  Choose how you want to use this imported BOM data
+                </p>
+              </div>
+
+              <RadioGroup
+                value={importDestination}
+                onValueChange={(value: string) => setImportDestination(value as ImportDestination)}
+                className="space-y-4"
+              >
+                {/* Template BOM Option */}
+                <label
+                  className={`
+                    flex items-start gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all
+                    ${importDestination === 'template' 
+                      ? 'border-[var(--accent-blue)] bg-[var(--accent-blue)]/5' 
+                      : 'border-[var(--border-subtle)] hover:border-[var(--border-default)]'}
+                  `}
+                >
+                  <RadioGroupItem value="template" className="mt-1" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <FileBox className="h-5 w-5 text-[var(--accent-blue)]" />
+                      <span className="font-medium">Create as Template BOM</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--accent-blue)]/10 text-[var(--accent-blue)]">
+                        Recommended
+                      </span>
+                    </div>
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      Import as a read-only template. You can then create a Working BOM from this template 
+                      to start building costs. This preserves the original structure for comparison.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Template + Working BOM Option */}
+                <label
+                  className={`
+                    flex items-start gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all
+                    ${importDestination === 'both' 
+                      ? 'border-[var(--accent-blue)] bg-[var(--accent-blue)]/5' 
+                      : 'border-[var(--border-subtle)] hover:border-[var(--border-default)]'}
+                  `}
+                >
+                  <RadioGroupItem value="both" className="mt-1" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center">
+                        <FileBox className="h-5 w-5 text-[var(--accent-blue)]" />
+                        <ArrowRight className="h-4 w-4 text-[var(--text-secondary)] mx-1" />
+                        <Wrench className="h-5 w-5 text-[var(--accent-green)]" />
+                      </div>
+                      <span className="font-medium">Create Template + Working BOM</span>
+                    </div>
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      Import as template AND immediately create a Working BOM from it. 
+                      This is the quickest way to start working with your BOM data.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Direct to Working BOM Option */}
+                <label
+                  className={`
+                    flex items-start gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all
+                    ${importDestination === 'working' 
+                      ? 'border-[var(--accent-orange)] bg-[var(--accent-orange)]/5' 
+                      : 'border-[var(--border-subtle)] hover:border-[var(--border-default)]'}
+                  `}
+                >
+                  <RadioGroupItem value="working" className="mt-1" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Wrench className="h-5 w-5 text-[var(--accent-orange)]" />
+                      <span className="font-medium">Import directly to Working BOM</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--accent-orange)]/10 text-[var(--accent-orange)]">
+                        Legacy
+                      </span>
+                    </div>
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      Skip template creation and import directly as editable Working BOM.
+                      Use this if you don't need to compare against the original import.
+                    </p>
+                  </div>
+                </label>
+              </RadioGroup>
+
+              {/* Save to Global Templates Option */}
+              <div className="p-4 bg-[var(--bg-tertiary)] rounded-lg border border-[var(--border-subtle)]">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <Checkbox
+                    checked={saveToGlobal}
+                    onCheckedChange={(checked) => setSaveToGlobal(checked === true)}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Globe className="h-4 w-4 text-[var(--text-secondary)]" />
+                      <span className="text-sm font-medium">Save to Global Templates</span>
+                    </div>
+                    <p className="text-xs text-[var(--text-secondary)] mb-3">
+                      Make this template available for use in other projects
+                    </p>
+                    
+                    {saveToGlobal && (
+                      <div className="space-y-3 pt-2 border-t border-[var(--border-subtle)]">
+                        <div>
+                          <Label htmlFor="globalTemplateName" className="text-xs">Template Name *</Label>
+                          <Input
+                            id="globalTemplateName"
+                            value={globalTemplateName}
+                            onChange={(e) => setGlobalTemplateName(e.target.value)}
+                            placeholder="e.g., Standard Product BOM 2024"
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="globalTemplateDescription" className="text-xs">Description</Label>
+                          <Textarea
+                            id="globalTemplateDescription"
+                            value={globalTemplateDescription}
+                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setGlobalTemplateDescription(e.target.value)}
+                            placeholder="Optional description..."
+                            className="mt-1"
+                            rows={2}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </label>
+              </div>
+
+              {/* Import Options */}
+              <div className="p-4 bg-[var(--bg-tertiary)] rounded-lg border border-[var(--border-subtle)]">
+                <h4 className="font-medium mb-3 text-sm">Additional Options</h4>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <Checkbox
+                      checked={importOptions.createMissingItems}
+                      onCheckedChange={(checked) => 
+                        setImportOptions(prev => ({ ...prev, createMissingItems: checked === true }))
+                      }
+                    />
+                    <div>
+                      <span className="text-sm font-medium">Create missing items</span>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        Automatically create new items in the global catalog if they don't exist
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
             </div>
           )}
 
@@ -510,6 +693,7 @@ export default function ImportPage() {
 
           {currentStep === 'results' && importResult && (
             <div className="space-y-4">
+              {/* Main Import Result */}
               <div
                 className={`p-6 rounded-md border-2 ${
                   importResult.success
@@ -524,14 +708,68 @@ export default function ImportPage() {
                     <XCircle className="h-8 w-8 text-[var(--accent-orange)]" />
                   )}
                   <div>
-                    <h3 className="text-lg font-medium">Import {importResult.success ? 'Successful' : 'Completed with Errors'}</h3>
+                    <h3 className="text-lg font-medium">
+                      {importDestination === 'working' ? 'Working BOM' : 'Template BOM'} Import {importResult.success ? 'Successful' : 'Completed with Errors'}
+                    </h3>
                     <p className="text-sm text-[var(--text-secondary)]">
-                      {importResult.successCount} rows imported successfully
+                      {importResult.successCount} items imported successfully
                       {importResult.errorCount > 0 && `, ${importResult.errorCount} errors`}
                     </p>
                   </div>
                 </div>
               </div>
+
+              {/* Working BOM Result (if created) */}
+              {workingBomResult && (
+                <div
+                  className={`p-4 rounded-md border ${
+                    workingBomResult.success
+                      ? 'border-[var(--accent-green)]/30 bg-[var(--accent-green)]/5'
+                      : 'border-[var(--accent-red)]/30 bg-[var(--accent-red)]/5'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {workingBomResult.success ? (
+                      <CheckCircle2 className="h-5 w-5 text-[var(--accent-green)]" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-[var(--accent-red)]" />
+                    )}
+                    <div>
+                      <span className="font-medium text-sm">Working BOM Created</span>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        {workingBomResult.itemCount} items ready for cost building
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Global Template Result (if saved) */}
+              {globalTemplateResult && (
+                <div
+                  className={`p-4 rounded-md border ${
+                    globalTemplateResult.success
+                      ? 'border-[var(--accent-blue)]/30 bg-[var(--accent-blue)]/5'
+                      : 'border-[var(--accent-red)]/30 bg-[var(--accent-red)]/5'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {globalTemplateResult.success ? (
+                      <CheckCircle2 className="h-5 w-5 text-[var(--accent-blue)]" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-[var(--accent-red)]" />
+                    )}
+                    <div>
+                      <span className="font-medium text-sm">Saved to Global Templates</span>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        Template "{globalTemplateName}" is now available for other projects
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Errors */}
               {importResult.errors.length > 0 && (
                 <div className="max-h-64 overflow-auto">
                   <h4 className="font-medium mb-2">Errors:</h4>
@@ -542,6 +780,58 @@ export default function ImportPage() {
                   ))}
                 </div>
               )}
+
+              {/* Next Actions for Template Import */}
+              {importDestination === 'template' && importResult.success && !workingBomResult && (
+                <div className="p-4 bg-[var(--bg-tertiary)] rounded-lg border border-[var(--border-subtle)]">
+                  <h4 className="font-medium mb-3">Next Steps</h4>
+                  <div className="space-y-3">
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      Your Template BOM has been imported. You can now:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={async () => {
+                          if (!user) return;
+                          setLoading(true);
+                          const result = await createWorkingBomFromTemplate(projectId, user.uid);
+                          setWorkingBomResult(result);
+                          setLoading(false);
+                        }}
+                        disabled={loading}
+                        className="bg-[var(--accent-green)] hover:bg-[var(--accent-green)]/90"
+                      >
+                        {loading ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Copy className="h-4 w-4 mr-2" />
+                        )}
+                        Create Working BOM
+                      </Button>
+                      {!globalTemplateResult && (
+                        <Button
+                          variant="outline"
+                          onClick={async () => {
+                            if (!user) return;
+                            const name = prompt('Enter template name:');
+                            if (!name) return;
+                            setLoading(true);
+                            const result = await saveAsGlobalTemplate(projectId, name, '', user.uid);
+                            setGlobalTemplateResult(result);
+                            setGlobalTemplateName(name);
+                            setLoading(false);
+                          }}
+                          disabled={loading}
+                        >
+                          <Globe className="h-4 w-4 mr-2" />
+                          Save as Global Template
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {importResult.versionId && (
                 <div className="p-4 bg-[var(--bg-tertiary)] rounded-md">
                   <p className="text-sm">
@@ -584,10 +874,34 @@ export default function ImportPage() {
       )}
 
       {currentStep === 'results' && (
-        <div className="flex justify-end">
-          <Button onClick={() => router.push(`/project/${projectId}/bom`)}>
-            View BOM
+        <div className="flex justify-between">
+          <Button variant="outline" onClick={() => {
+            // Reset and start over
+            setCurrentStep('upload');
+            setSelectedFile(null);
+            setCsvData([]);
+            setCsvHeaders([]);
+            setMappings({});
+            setImportResult(null);
+            setWorkingBomResult(null);
+            setGlobalTemplateResult(null);
+            setValidationResult(null);
+            setError('');
+          }}>
+            Import Another File
           </Button>
+          <div className="flex gap-2">
+            {importDestination === 'template' && !workingBomResult && (
+              <Button variant="outline" onClick={() => router.push(`/project/${projectId}/bom?view=template`)}>
+                View Template
+              </Button>
+            )}
+            <Button onClick={() => router.push(`/project/${projectId}/bom`)}>
+              {workingBomResult || importDestination === 'working' || importDestination === 'both' 
+                ? 'View Working BOM' 
+                : 'View BOM'}
+            </Button>
+          </div>
         </div>
       )}
     </div>
