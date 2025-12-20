@@ -359,7 +359,7 @@ export default function VersionsPage() {
         onOpenChange={setIsCreateVersionOpen}
         onCreateVersion={handleCreateVersion}
         currentItemCount={stats?.totalItems || 0}
-        currentTotalCost={stats?.totalExtendedCost || 0}
+        currentTotalCost={stats?.totalCost || 0}
       />
     </div>
   );

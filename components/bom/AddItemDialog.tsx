@@ -239,6 +239,7 @@ export function AddItemDialog({
         isCustomGroup: false,
         hasCostChange: false,
         hasQuantityChange: false,
+        isNewPart: mode === 'placeholder',
         
         // Notes
         notes: notes || undefined,

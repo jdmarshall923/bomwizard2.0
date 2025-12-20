@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProject } from '@/lib/context/ProjectContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { toast } from '@/components/ui/sonner';
 import { PoundSterling, Package, Clock, FileCheck, TrendingUp, Activity, Download, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { deleteDocument } from '@/lib/firebase/firestore';
@@ -26,8 +28,60 @@ export default function ProjectDashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-[var(--text-secondary)]">Loading project...</div>
+      <div className="space-y-8">
+        {/* Header Skeleton */}
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-64" />
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-6 w-24" />
+            <Skeleton className="h-6 w-16 rounded-full" />
+          </div>
+        </div>
+
+        {/* Stats Grid Skeleton */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i} className="border-[var(--border-subtle)] bg-[var(--bg-secondary)]/50">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="h-9 w-9 rounded-lg" />
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-3 w-32" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Main Content Skeleton */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Card className="lg:col-span-2 border-[var(--border-subtle)] bg-[var(--bg-secondary)]/50">
+            <CardHeader>
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-56" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between py-2">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+          <Card className="border-[var(--border-subtle)] bg-[var(--bg-secondary)]/50">
+            <CardHeader>
+              <Skeleton className="h-5 w-28" />
+              <Skeleton className="h-4 w-24" />
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-12 w-full rounded-lg" />
+              ))}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -89,10 +143,16 @@ export default function ProjectDashboardPage() {
     setDeleting(true);
     try {
       await deleteDocument('projects', project.id);
+      toast.success('Project deleted', {
+        description: `"${project.name}" has been permanently deleted.`,
+      });
       router.push('/projects');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting project:', error);
-      alert('Failed to delete project: ' + (error.message || 'Unknown error'));
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to delete project', {
+        description: message,
+      });
       setDeleting(false);
     }
   };

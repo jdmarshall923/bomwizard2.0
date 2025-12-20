@@ -55,7 +55,7 @@ export async function parseCSV(
               errors: results.errors,
             });
           },
-          error: (error) => {
+          error: (error: Error) => {
             reject(error);
           },
         });
@@ -106,7 +106,7 @@ export function detectDelimiter(firstLine: string): string {
 /**
  * Detect headers from the first few rows of data
  */
-export function detectHeaders(data: string[], sampleSize: number = 3): string[] {
+export function detectHeaders(data: (string[] | Record<string, unknown>)[], sampleSize: number = 3): string[] {
   if (data.length === 0) return [];
 
   // Take first few rows
@@ -117,14 +117,19 @@ export function detectHeaders(data: string[], sampleSize: number = 3): string[] 
   let headerRow = 0;
 
   sample.forEach((row, index) => {
-    const nonEmpty = row.filter((cell: string) => cell && cell.trim()).length;
+    const rowArray = Array.isArray(row) ? row : Object.values(row);
+    const nonEmpty = rowArray.filter((cell) => cell && String(cell).trim()).length;
     if (nonEmpty > maxNonEmpty) {
       maxNonEmpty = nonEmpty;
       headerRow = index;
     }
   });
 
-  return sample[headerRow] || [];
+  const result = sample[headerRow];
+  if (Array.isArray(result)) {
+    return result;
+  }
+  return Object.keys(result || {});
 }
 
 /**

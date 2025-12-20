@@ -100,7 +100,7 @@ export function useBom(projectId: string | null, versionId?: string | null) {
 
   // Get unique assembly codes from BOM items
   const getAssemblyCodes = useCallback((): string[] => {
-    const codes = new Set(bomItems.map(item => item.assemblyCode));
+    const codes = new Set(bomItems.map(item => item.assemblyCode).filter((code): code is string => !!code));
     return Array.from(codes).sort();
   }, [bomItems]);
 
@@ -283,11 +283,12 @@ export function useBomGroupedByAssembly(projectId: string | null, versionId?: st
     const groups: Record<string, { assembly: Assembly | null; items: BomItem[] }> = {};
     
     bomItems.forEach(item => {
-      if (!groups[item.assemblyCode]) {
-        const assembly = assemblies.find(a => a.code === item.assemblyCode) || null;
-        groups[item.assemblyCode] = { assembly, items: [] };
+      const code = item.assemblyCode || 'UNGROUPED';
+      if (!groups[code]) {
+        const assembly = assemblies.find(a => a.code === code) || null;
+        groups[code] = { assembly, items: [] };
       }
-      groups[item.assemblyCode].items.push(item);
+      groups[code].items.push(item);
     });
 
     return groups;
@@ -337,8 +338,8 @@ export function useTemplateBom(projectId: string | null) {
 
   // Get unique group codes
   const getAssemblyCodes = useCallback((): string[] => {
-    const codes = new Set(templateItems.map(item => item.groupCode || item.assemblyCode));
-    return Array.from(codes).filter(Boolean).sort();
+    const codes = new Set(templateItems.map(item => item.groupCode || item.assemblyCode).filter((code): code is string => !!code));
+    return Array.from(codes).sort();
   }, [templateItems]);
 
   // Calculate stats

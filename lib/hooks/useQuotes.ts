@@ -1,5 +1,5 @@
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, query, where, orderBy } from 'firebase/firestore';
+import { collection, query, where, orderBy, QueryConstraint } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { Quote } from '@/types';
 
@@ -8,7 +8,7 @@ export function useQuotes(projectId: string | null, status?: Quote['status']) {
     return { quotes: [], loading: false, error: null };
   }
 
-  const constraints = [orderBy('createdAt', 'desc')];
+  const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
   if (status) {
     constraints.unshift(where('status', '==', status));
   }
@@ -28,4 +28,3 @@ export function useQuotes(projectId: string | null, status?: Quote['status']) {
     error,
   };
 }
-

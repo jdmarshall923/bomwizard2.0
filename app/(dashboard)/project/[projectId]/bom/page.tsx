@@ -28,6 +28,7 @@ import {
   History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from '@/components/ui/sonner';
 
 export default function BomControlPanelPage() {
   const params = useParams();
@@ -170,14 +171,15 @@ export default function BomControlPanelPage() {
 
   // Handle delete
   const handleDeleteItem = useCallback(async (itemId: string) => {
-    if (confirm('Are you sure you want to delete this item?')) {
-      try {
-        await deleteBomItem(itemId);
-        setIsDrawerOpen(false);
-        setSelectedWorkingItem(null);
-      } catch (err) {
-        console.error('Error deleting item:', err);
-      }
+    try {
+      await deleteBomItem(itemId);
+      setIsDrawerOpen(false);
+      setSelectedWorkingItem(null);
+    } catch (err) {
+      console.error('Error deleting item:', err);
+      toast.error('Failed to delete item', {
+        description: err instanceof Error ? err.message : 'An error occurred',
+      });
     }
   }, [deleteBomItem]);
 
@@ -210,9 +212,15 @@ export default function BomControlPanelPage() {
   const handleApplyVendorPrices = async () => {
     setApplyingPrices(true);
     try {
-      await applyVendorPricesToBom(projectId);
+      const result = await applyVendorPricesToBom(projectId);
+      toast.success('Vendor prices applied', {
+        description: `Updated pricing for ${result?.updated || 0} items.`,
+      });
     } catch (err) {
       console.error('Error applying vendor prices:', err);
+      toast.error('Failed to apply prices', {
+        description: err instanceof Error ? err.message : 'An error occurred',
+      });
     } finally {
       setApplyingPrices(false);
     }

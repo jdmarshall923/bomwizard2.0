@@ -53,8 +53,8 @@ export function autoDetectVendorPriceMappings(headers: string[]): ColumnMappings
     
     // Direct match
     if (VENDOR_PRICE_COLUMN_MAPPINGS[normalizedHeader]) {
-      mappings[normalizedHeader] = {
-        targetField: VENDOR_PRICE_COLUMN_MAPPINGS[normalizedHeader],
+      mappings[VENDOR_PRICE_COLUMN_MAPPINGS[normalizedHeader]] = {
+        source: normalizedHeader,
         transform: null,
       };
       return;
@@ -64,8 +64,8 @@ export function autoDetectVendorPriceMappings(headers: string[]): ColumnMappings
     const lowerHeader = normalizedHeader.toLowerCase();
     for (const [key, value] of Object.entries(VENDOR_PRICE_COLUMN_MAPPINGS)) {
       if (key.toLowerCase() === lowerHeader) {
-        mappings[normalizedHeader] = {
-          targetField: value,
+        mappings[value] = {
+          source: normalizedHeader,
           transform: null,
         };
         return;
@@ -74,19 +74,19 @@ export function autoDetectVendorPriceMappings(headers: string[]): ColumnMappings
     
     // Fuzzy matches
     if (lowerHeader.includes('vendor') && lowerHeader.includes('code')) {
-      mappings[normalizedHeader] = { targetField: 'vendorCode', transform: null };
+      mappings['vendorCode'] = { source: normalizedHeader, transform: null };
     } else if (lowerHeader.includes('vendor') && lowerHeader.includes('name')) {
-      mappings[normalizedHeader] = { targetField: 'vendorName', transform: null };
+      mappings['vendorName'] = { source: normalizedHeader, transform: null };
     } else if (lowerHeader.includes('unit') && lowerHeader.includes('price')) {
-      mappings[normalizedHeader] = { targetField: 'unitPrice', transform: 'parseFloat' };
+      mappings['unitPrice'] = { source: normalizedHeader, transform: 'parseFloat' };
     } else if (lowerHeader === 'moq' || lowerHeader.includes('minimum')) {
-      mappings[normalizedHeader] = { targetField: 'moq', transform: 'parseInt' };
+      mappings['moq'] = { source: normalizedHeader, transform: 'parseInt' };
     } else if (lowerHeader.includes('lead') && lowerHeader.includes('time')) {
-      mappings[normalizedHeader] = { targetField: 'leadTimeDays', transform: 'parseInt' };
+      mappings['leadTimeDays'] = { source: normalizedHeader, transform: 'parseInt' };
     } else if (lowerHeader.includes('landing')) {
-      mappings[normalizedHeader] = { targetField: 'landingPct', transform: 'parseFloat' };
+      mappings['landingPct'] = { source: normalizedHeader, transform: 'parseFloat' };
     } else if (lowerHeader.includes('bcode') || (lowerHeader.includes('item') && lowerHeader.includes('code'))) {
-      mappings[normalizedHeader] = { targetField: 'itemCode', transform: null };
+      mappings['itemCode'] = { source: normalizedHeader, transform: null };
     }
   });
   

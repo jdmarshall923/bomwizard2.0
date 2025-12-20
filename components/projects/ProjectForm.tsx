@@ -30,6 +30,8 @@ export function ProjectForm({ project, onSubmit, onCancel }: ProjectFormProps) {
         createdAt: project?.createdAt || {} as any,
         updatedAt: {} as any,
         createdBy: project?.createdBy || '',
+        hasTemplateBom: project?.hasTemplateBom || false,
+        hasWorkingBom: project?.hasWorkingBom || false,
       });
     } finally {
       setLoading(false);

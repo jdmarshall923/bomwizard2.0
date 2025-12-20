@@ -11,7 +11,7 @@ export function ChangeCard({ change }: ChangeCardProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm">{change.entityCode}</CardTitle>
+        <CardTitle className="text-sm">{change.itemCode}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-2 text-sm">
@@ -22,7 +22,7 @@ export function ChangeCard({ change }: ChangeCardProps) {
           <div>
             <span className="text-[var(--text-tertiary)]">Cost Impact:</span>
             <span className="ml-2 font-medium">
-              {change.costImpact >= 0 ? '+' : ''}£{change.costImpact.toFixed(2)}
+              {change.costImpact.extendedDelta >= 0 ? '+' : ''}£{change.costImpact.extendedDelta.toFixed(2)}
             </span>
           </div>
         </div>

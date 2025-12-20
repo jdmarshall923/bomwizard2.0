@@ -193,6 +193,7 @@ export async function transferItemsToWorkingBom(
         isFromTemplate: true,
         isAddedItem: true, // These are being added from template selection
         isCustomGroup: false,
+        isNewPart: false,
         
         // Change tracking
         hasCostChange: false,

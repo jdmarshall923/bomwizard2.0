@@ -360,7 +360,7 @@ export function CostByAssemblyChart({ data, isLoading = false }: CostByAssemblyC
           <ResponsiveContainer width="100%" height={350}>
             <PieChart>
               <Pie
-                activeIndex={activeIndex}
+                {...({ activeIndex } as any)}
                 activeShape={renderActiveShape as unknown as (props: unknown) => JSX.Element}
                 data={chartData}
                 cx="50%"

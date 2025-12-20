@@ -227,7 +227,7 @@ export async function importToTemplateBom(
           // Hierarchy structure
           level,
           groupCode: currentGroupCode,
-          parentItemCode: parentItemCode || null,
+          parentItemCode: parentItemCode || undefined,
           sequence: i + 1,
           
           // Item identification
@@ -242,9 +242,9 @@ export async function importToTemplateBom(
           per: row.per?.toLowerCase() === 'lot' ? 'lot' : 'unit',
           
           // Reference data
-          altGroup: parseInt(row.altGroup) || null,
-          altGroupRank: parseInt(row.altGroupRank) || null,
-          revision: row.revision || null,
+          altGroup: parseInt(row.altGroup) || undefined,
+          altGroupRank: parseInt(row.altGroupRank) || undefined,
+          revision: row.revision || undefined,
           stocked: row.stocked === 'True' || row.stocked === true,
           
           // Legacy fields for backward compatibility
@@ -627,6 +627,7 @@ export async function createWorkingBomFromTemplate(
       isCustomGroup: false,
       hasCostChange: false,
       hasQuantityChange: false,
+      isNewPart: false,
       
       // Store original values for comparison
       originalMaterialCost: template.originalMaterialCost,

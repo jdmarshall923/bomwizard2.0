@@ -21,6 +21,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { toast } from '@/components/ui/sonner';
 import { 
   Package, 
   Boxes, 
@@ -65,6 +67,8 @@ export function ItemEditDrawer({ item, open, onClose, onSave, onDelete }: ItemEd
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 
   // Initialize form when item changes
   useEffect(() => {
@@ -110,9 +114,14 @@ export function ItemEditDrawer({ item, open, onClose, onSave, onDelete }: ItemEd
         vendorId: formState.vendorId || undefined,
       });
       setHasChanges(false);
+      toast.success('Item updated', {
+        description: `${item.itemCode} has been updated successfully.`,
+      });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save changes');
+      const message = err instanceof Error ? err.message : 'Failed to save changes';
+      setError(message);
+      toast.error('Failed to save', { description: message });
     } finally {
       setSaving(false);
     }
@@ -121,9 +130,16 @@ export function ItemEditDrawer({ item, open, onClose, onSave, onDelete }: ItemEd
   // Handle close with unsaved changes
   const handleClose = () => {
     if (hasChanges) {
-      // Could add a confirmation dialog here
-      // For now, just close
+      setShowUnsavedConfirm(true);
+      return;
     }
+    onClose();
+  };
+
+  // Handle close confirmation
+  const handleConfirmClose = () => {
+    setShowUnsavedConfirm(false);
+    setHasChanges(false);
     onClose();
   };
 
@@ -136,8 +152,13 @@ export function ItemEditDrawer({ item, open, onClose, onSave, onDelete }: ItemEd
     
     try {
       await onDelete(item.id);
+      toast.success('Item deleted', {
+        description: `${item.itemCode} has been removed from the BOM.`,
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete item');
+      const message = err instanceof Error ? err.message : 'Failed to delete item';
+      setError(message);
+      toast.error('Failed to delete', { description: message });
       setDeleting(false);
     }
   };
@@ -370,7 +391,7 @@ export function ItemEditDrawer({ item, open, onClose, onSave, onDelete }: ItemEd
           {onDelete && (
             <Button 
               variant="outline"
-              onClick={handleDelete}
+              onClick={() => setShowDeleteConfirm(true)}
               disabled={saving || deleting}
               className="w-full border-[var(--accent-red)]/50 text-[var(--accent-red)] hover:bg-[var(--accent-red)]/10"
             >
@@ -388,6 +409,31 @@ export function ItemEditDrawer({ item, open, onClose, onSave, onDelete }: ItemEd
             </Button>
           )}
         </SheetFooter>
+
+        {/* Delete Confirmation Dialog */}
+        <ConfirmDialog
+          open={showDeleteConfirm}
+          onOpenChange={setShowDeleteConfirm}
+          title="Delete BOM Item"
+          description={`Are you sure you want to delete "${item?.itemCode}"? This action cannot be undone.`}
+          confirmText="Delete"
+          cancelText="Cancel"
+          variant="danger"
+          onConfirm={handleDelete}
+          isLoading={deleting}
+        />
+
+        {/* Unsaved Changes Confirmation Dialog */}
+        <ConfirmDialog
+          open={showUnsavedConfirm}
+          onOpenChange={setShowUnsavedConfirm}
+          title="Unsaved Changes"
+          description="You have unsaved changes. Are you sure you want to close without saving?"
+          confirmText="Discard Changes"
+          cancelText="Keep Editing"
+          variant="warning"
+          onConfirm={handleConfirmClose}
+        />
       </SheetContent>
     </Sheet>
   );

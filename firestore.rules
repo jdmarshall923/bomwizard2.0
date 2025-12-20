@@ -1,7 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
+    // ============================================
+    // Helper Functions
+    // ============================================
+    
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -10,76 +13,185 @@ service cloud.firestore {
       return request.auth.uid == userId;
     }
     
-    // Projects - authenticated users can read/write their own
+    function isProjectOwner(projectId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/projects/$(projectId)).data.createdBy == request.auth.uid;
+    }
+    
+    function isProjectMember(projectId) {
+      // Check if user is owner or in members array
+      let project = get(/databases/$(database)/documents/projects/$(projectId)).data;
+      return isAuthenticated() && (
+        project.createdBy == request.auth.uid ||
+        (project.members != null && request.auth.uid in project.members)
+      );
+    }
+    
+    function hasValidFields(requiredFields) {
+      return request.resource.data.keys().hasAll(requiredFields);
+    }
+    
+    function isValidTimestamp(field) {
+      return request.resource.data[field] is timestamp;
+    }
+    
+    function isNotDeleted() {
+      return !('deleted' in resource.data) || resource.data.deleted != true;
+    }
+    
+    // ============================================
+    // Projects Collection
+    // ============================================
+    
     match /projects/{projectId} {
+      // Anyone authenticated can read projects (for listing)
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated() && 
-        resource.data.createdBy == request.auth.uid;
       
-      // Sub-collections follow parent permissions (one level deep)
-      match /{subcollection}/{docId} {
-        allow read, write: if isAuthenticated();
+      // Only authenticated users can create projects
+      allow create: if isAuthenticated() && 
+        request.resource.data.createdBy == request.auth.uid &&
+        hasValidFields(['name', 'createdBy', 'createdAt']);
+      
+      // Only owner can update or delete
+      allow update: if isProjectOwner(projectId);
+      allow delete: if isProjectOwner(projectId);
+      
+      // ============================================
+      // Project Sub-collections
+      // ============================================
+      
+      // BOM Items - project members can read/write
+      match /bomItems/{itemId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow create: if isAuthenticated() && isProjectMember(projectId);
+        allow update: if isAuthenticated() && isProjectMember(projectId);
+        allow delete: if isAuthenticated() && isProjectMember(projectId);
+      }
+      
+      // Template BOM - project members can read, only owner can write
+      match /templateBom/{itemId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow write: if isAuthenticated() && isProjectOwner(projectId);
+      }
+      
+      // BOM Groups - project members can read/write
+      match /bomGroups/{groupId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow write: if isAuthenticated() && isProjectMember(projectId);
+      }
+      
+      // Assemblies - project members can read/write
+      match /assemblies/{assemblyId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow write: if isAuthenticated() && isProjectMember(projectId);
+      }
+      
+      // Versions - project members can read, write
+      match /versions/{versionId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow create: if isAuthenticated() && isProjectMember(projectId);
+        allow update: if isAuthenticated() && isProjectMember(projectId);
+        allow delete: if isAuthenticated() && isProjectOwner(projectId);
         
-        // Nested sub-collections (e.g., versions/{versionId}/bomItems)
-        match /{nestedCollection}/{nestedDocId} {
-          allow read, write: if isAuthenticated();
+        // Version BOM Items (snapshots)
+        match /bomItems/{itemId} {
+          allow read: if isAuthenticated() && isProjectMember(projectId);
+          allow write: if isAuthenticated() && isProjectMember(projectId);
         }
+      }
+      
+      // New Parts - project members can read/write
+      match /newParts/{newPartId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow write: if isAuthenticated() && isProjectMember(projectId);
+      }
+      
+      // Quotes - project members can read/write
+      match /quotes/{quoteId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow write: if isAuthenticated() && isProjectMember(projectId);
+      }
+      
+      // Import History - project members can read, only owner can write
+      match /importHistory/{importId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow write: if isAuthenticated() && isProjectOwner(projectId);
       }
     }
     
-    // Global items - all authenticated users can read
-    match /items/{itemId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-    }
+    // ============================================
+    // Global Master Data Collections
+    // ============================================
     
-    // SLItems - Infor master data (separate from BOM items)
+    // SL Items - Infor master data (read-only for most users)
     match /slItems/{itemId} {
       allow read: if isAuthenticated();
+      // Only allow write if user is admin (future implementation)
+      // For now, allow authenticated users to write for import functionality
       allow write: if isAuthenticated();
     }
     
-    // Vendors - all authenticated users
-    match /vendors/{vendorId} {
-      allow read, write: if isAuthenticated();
-    }
-    
-    // SLVendors - Infor master data (separate from project vendors)
+    // SL Vendors - Infor master data
     match /slVendors/{vendorId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
     
-    // Import templates - all authenticated users
-    match /importTemplates/{templateId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-    }
-    
-    // Contract prices - all authenticated users
-    match /contractPrices/{priceId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-    }
-    
-    // Vendor contract prices - Infor pricing data
+    // Vendor Contract Prices - Infor pricing data
     match /vendorContractPrices/{priceId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
     
-    // Landing rates - all authenticated users
+    // Legacy items collection
+    match /items/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Legacy vendors collection
+    match /vendors/{vendorId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Import Templates - user-specific templates
+    match /importTemplates/{templateId} {
+      allow read: if isAuthenticated();
+      // Users can only write their own templates
+      allow create: if isAuthenticated() && 
+        request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if isAuthenticated() && 
+        resource.data.createdBy == request.auth.uid;
+    }
+    
+    // Contract Prices - global pricing data
+    match /contractPrices/{priceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // Landing Rates - global rates
     match /landingRates/{rateId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
     
-    // Manufacturing costs - all authenticated users
+    // Manufacturing Costs - global costs
     match /manufacturingCosts/{costId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
     }
+    
+    // ============================================
+    // User Profiles (future)
+    // ============================================
+    
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if false; // Users cannot delete their profiles
+    }
   }
 }
-

@@ -306,7 +306,8 @@ export async function createVersion(
         const batchItems = versionItems.slice(i, i + BATCH_SIZE);
         
         batchItems.forEach((item) => {
-          const itemRef = doc(versionItemsRef, item.id);
+          const itemId = (item as { id: string }).id;
+          const itemRef = doc(versionItemsRef, itemId);
           batch.set(itemRef, removeUndefined(item));
         });
         
