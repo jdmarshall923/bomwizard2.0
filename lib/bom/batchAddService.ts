@@ -4,10 +4,12 @@ import {
   doc, 
   Timestamp,
   addDoc,
-  serverTimestamp 
+  serverTimestamp,
+  updateDoc 
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { BomItem, BomGroup, BomItemType, ItemSource } from '@/types';
+import { NewPart } from '@/types/newPart';
 
 /**
  * Batch item for adding to BOM
@@ -168,7 +170,6 @@ export async function batchAddItems(
   existingItems: BomItem[],
   newGroups: Map<string, NewGroupDetails> // Map of groupCode -> NewGroupDetails for groups to create
 ): Promise<BatchAddResult> {
-  const errors: Array<{ code: string; error: string }> = [];
   let groupCreated: BomGroup | undefined;
   const createdGroups: BomGroup[] = [];
 
@@ -305,6 +306,67 @@ export async function batchAddItems(
     // Commit batch
     await batch.commit();
 
+    // Create NewPart documents for items with isNewPart: true
+    // This is a client-side fallback in case Cloud Functions aren't deployed
+    const newPartsRef = collection(db, `projects/${projectId}/newParts`);
+    const bomItemsRefForUpdate = collection(db, `projects/${projectId}/bomItems`);
+    
+    for (const [groupCode, groupItems] of itemsByGroup.entries()) {
+      for (const item of groupItems) {
+        if (item.isNewPart) {
+          try {
+            // Find the BomItem that was just created (we need its ID)
+            // Since we used batch.set(docRef, ...), we can get the docRef.id
+            // But batch operations don't return IDs, so we need to query
+            const { getDocs, query, where } = await import('firebase/firestore');
+            const bomQuery = query(
+              bomItemsRefForUpdate,
+              where('itemCode', '==', item.code.toUpperCase()),
+              where('groupCode', '==', groupCode)
+            );
+            const bomSnapshot = await getDocs(bomQuery);
+            
+            if (!bomSnapshot.empty) {
+              const bomDoc = bomSnapshot.docs[0];
+              const bomItemId = bomDoc.id;
+              const now = Timestamp.now();
+
+              // Create NewPart document
+              const newPartData: Omit<NewPart, 'id'> = {
+                projectId,
+                bomItemId,
+                placeholderCode: item.code.toUpperCase(),
+                description: item.description,
+                groupCode: groupCode,
+                quantity: item.quantity,
+                status: 'added',
+                priority: 'medium',
+                requestedBy: 'system',
+                requestedAt: now,
+                designStatus: 'not_started',
+                engineeringStatus: 'not_started',
+                procurementStatus: 'not_started',
+                createdAt: now,
+                updatedAt: now,
+              };
+
+              const newPartDocRef = await addDoc(newPartsRef, newPartData);
+
+              // Update BomItem with newPartTrackerId
+              await updateDoc(doc(bomItemsRefForUpdate, bomItemId), {
+                newPartTrackerId: newPartDocRef.id,
+                newPartStatus: 'added',
+                updatedAt: now,
+              });
+            }
+          } catch (err) {
+            console.error(`Failed to create NewPart for ${item.code}:`, err);
+            // Continue with other items even if one fails
+          }
+        }
+      }
+    }
+
     return {
       success: true,
       groupCreated,
@@ -312,13 +374,14 @@ export async function batchAddItems(
       errors: [],
       newPartsCount,
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('Batch add error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Failed to add items';
     return {
       success: false,
       groupCreated,
       itemsCreated: 0,
-      errors: [{ code: 'SYSTEM', error: error.message || 'Failed to add items' }],
+      errors: [{ code: 'SYSTEM', error: errorMessage }],
       newPartsCount: 0,
     };
   }

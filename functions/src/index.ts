@@ -3,7 +3,115 @@ import * as admin from 'firebase-admin';
 
 admin.initializeApp();
 
-// Auto-create quote when new BOM item is added
+// ============================================
+// NEW PART TRACKER - Phase 7
+// ============================================
+
+/**
+ * Auto-create NewPart document when a BOM item is created with isNewPart: true
+ * Triggers on: projects/{projectId}/bomItems/{itemId} creation
+ */
+export const autoCreateNewPart = functions.firestore
+  .document('projects/{projectId}/bomItems/{itemId}')
+  .onCreate(async (snap, context) => {
+    const item = snap.data();
+    const { projectId, itemId } = context.params;
+
+    // Only create NewPart if item is flagged as isNewPart and doesn't already have a tracker
+    if (item.isNewPart === true && !item.newPartTrackerId) {
+      const newPartsRef = admin.firestore().collection(`projects/${projectId}/newParts`);
+      const now = admin.firestore.FieldValue.serverTimestamp();
+
+      // Create the NewPart document
+      const newPartDoc = await newPartsRef.add({
+        projectId,
+        bomItemId: itemId,
+        placeholderCode: item.itemCode,
+        description: item.itemDescription || '',
+        groupCode: item.groupCode || '',
+        quantity: item.quantity || 1,
+        status: 'added',
+        priority: 'medium',
+        requestedBy: item.updatedBy || 'system',
+        requestedAt: now,
+        designStatus: 'not_started',
+        engineeringStatus: 'not_started',
+        procurementStatus: 'not_started',
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      // Update the BomItem with the newPartTrackerId
+      await admin.firestore()
+        .collection(`projects/${projectId}/bomItems`)
+        .doc(itemId)
+        .update({
+          newPartTrackerId: newPartDoc.id,
+          newPartStatus: 'added',
+          updatedAt: now,
+        });
+
+      functions.logger.info(`Created NewPart ${newPartDoc.id} for BomItem ${itemId}`);
+    }
+
+    return null;
+  });
+
+/**
+ * Update BOM item when NewPart is completed
+ * Triggers on: projects/{projectId}/newParts/{newPartId} updates
+ */
+export const onNewPartComplete = functions.firestore
+  .document('projects/{projectId}/newParts/{newPartId}')
+  .onUpdate(async (change, context) => {
+    const before = change.before.data();
+    const after = change.after.data();
+    const { projectId } = context.params;
+
+    // Check if status changed to 'complete'
+    if (before.status !== 'complete' && after.status === 'complete') {
+      const bomItemId = after.bomItemId;
+
+      if (bomItemId && after.finalItemCode) {
+        const now = admin.firestore.FieldValue.serverTimestamp();
+        const landingCost = (after.finalUnitPrice || 0) * ((after.landingPct || 0) / 100);
+        const unitCost = (after.finalUnitPrice || 0) + landingCost;
+        const extendedCost = unitCost * (after.quantity || 1);
+
+        // Update the BomItem with final details
+        await admin.firestore()
+          .collection(`projects/${projectId}/bomItems`)
+          .doc(bomItemId)
+          .update({
+            itemCode: after.finalItemCode,
+            isPlaceholder: false,
+            isNewPart: false,
+            newPartStatus: 'complete',
+            finalItemCode: after.finalItemCode,
+            materialCost: after.finalUnitPrice || 0,
+            landingCost,
+            landingPct: after.landingPct || 0,
+            extendedCost,
+            costSource: 'contract',
+            vendorCode: after.vendorCode || null,
+            vendorName: after.vendorName || null,
+            updatedAt: now,
+          });
+
+        functions.logger.info(
+          `Updated BomItem ${bomItemId} with final B-code ${after.finalItemCode}`
+        );
+      }
+    }
+
+    return null;
+  });
+
+// ============================================
+// LEGACY FUNCTIONS
+// ============================================
+
+// Auto-create quote when new BOM item is added (legacy)
 export const autoCreateQuote = functions.firestore
   .document('projects/{projectId}/versions/{versionId}/bomItems/{itemId}')
   .onCreate(async (snap, context) => {

@@ -17,7 +17,7 @@ export interface Item {
   drawingNumber?: string;
   revision?: string;
   isManufactured: boolean;
-  isPlaceholder: boolean; // Bxxxx style codes
+  isPlaceholder: boolean; // Items without complete B code (B + 6 digits)
   buyer?: string;
   weightKg?: number;
   createdAt: Timestamp;
@@ -205,7 +205,7 @@ export interface BomItem {
   itemDescription: string;
   itemType: BomItemType;
   source: ItemSource;
-  isPlaceholder: boolean;      // New item with placeholder code (BNEW-xxx)
+  isPlaceholder: boolean;      // Items without complete B code (B + 6 digits, e.g., B123456)
   
   // Quantities
   quantity: number;

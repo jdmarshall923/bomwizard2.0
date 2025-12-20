@@ -16,6 +16,7 @@ import {
   Factory,
   ChevronLeft,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +29,7 @@ const projectNavigation = [
 ];
 
 const trackingNavigation = [
+  { name: 'New Parts', href: '/project/[projectId]/new-parts', icon: Sparkles },
   { name: 'Quote Log', href: '/project/[projectId]/quotes', icon: FileCheck },
   { name: 'Manufacturing Log', href: '/project/[projectId]/manufacturing', icon: Factory },
 ];

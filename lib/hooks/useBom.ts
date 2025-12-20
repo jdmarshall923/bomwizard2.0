@@ -118,7 +118,13 @@ export function useBom(projectId: string | null, versionId?: string | null) {
       landingCost: bomItems.reduce((sum, item) => sum + ((item.landingCost || 0) * (item.quantity || 0)), 0),
       labourCost: bomItems.reduce((sum, item) => sum + ((item.labourCost || 0) * (item.quantity || 0)), 0),
       newPartsCount: bomItems.filter(item => item.partCategory === 'new_part').length,
-      placeholdersCount: bomItems.filter(item => item.itemCode?.startsWith('B') && /^B\d/.test(item.itemCode)).length,
+      placeholdersCount: bomItems.filter(item => {
+        // Complete B code = B + exactly 6 numbers (e.g., B123456)
+        // Placeholder = starts with B but doesn't have complete 6-digit code
+        const startsWithB = item.itemCode?.startsWith('B');
+        const isCompleteBCode = /^B\d{6}$/.test(item.itemCode || '');
+        return startsWithB && !isCompleteBCode;
+      }).length,
       addedItemsCount: bomItems.filter(item => item.isAddedItem).length,
       costChangesCount: bomItems.filter(item => item.hasCostChange).length,
       newPartTrackingCount: bomItems.filter(item => item.isNewPart).length,
@@ -143,9 +149,13 @@ export function useBom(projectId: string | null, versionId?: string | null) {
         return false;
       }
 
-      // Placeholders filter (Bxxxx style codes)
+      // Placeholders filter (B-codes without complete 6-digit code)
+      // Complete B code = B + exactly 6 numbers (e.g., B123456)
+      // Placeholder = starts with B but doesn't have complete 6-digit code
       if (filters.showPlaceholders) {
-        const isPlaceholder = item.itemCode?.startsWith('B') && /^B\d/.test(item.itemCode);
+        const startsWithB = item.itemCode?.startsWith('B');
+        const isCompleteBCode = /^B\d{6}$/.test(item.itemCode || '');
+        const isPlaceholder = startsWithB && !isCompleteBCode;
         if (!isPlaceholder) return false;
       }
 
@@ -365,9 +375,13 @@ export function useTemplateBom(projectId: string | null) {
         return false;
       }
 
-      // Placeholders filter
+      // Placeholders filter (B-codes without complete 6-digit code)
+      // Complete B code = B + exactly 6 numbers (e.g., B123456)
+      // Placeholder = starts with B but doesn't have complete 6-digit code
       if (filters.showPlaceholders) {
-        const isPlaceholder = item.itemCode?.startsWith('B') && /^B\d/.test(item.itemCode);
+        const startsWithB = item.itemCode?.startsWith('B');
+        const isCompleteBCode = /^B\d{6}$/.test(item.itemCode || '');
+        const isPlaceholder = startsWithB && !isCompleteBCode;
         if (!isPlaceholder) return false;
       }
 

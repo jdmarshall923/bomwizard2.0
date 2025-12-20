@@ -64,7 +64,11 @@ export function BomTable({
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 
   const isPlaceholder = (itemCode: string) => {
-    return itemCode?.startsWith('B') && /^B\d/.test(itemCode);
+    // Complete B code = B + exactly 6 numbers (e.g., B123456)
+    // Placeholder = starts with B but doesn't have complete 6-digit code
+    const startsWithB = itemCode?.startsWith('B');
+    const isCompleteBCode = /^B\d{6}$/.test(itemCode || '');
+    return startsWithB && !isCompleteBCode;
   };
 
   const columns = useMemo(() => [

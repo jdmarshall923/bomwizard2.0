@@ -142,7 +142,11 @@ export function ItemEditDrawer({ item, open, onClose, onSave, onDelete }: ItemEd
     }
   };
 
-  const isPlaceholder = item?.itemCode?.startsWith('B') && /^B\d/.test(item?.itemCode || '');
+  // Complete B code = B + exactly 6 numbers (e.g., B123456)
+  // Placeholder = starts with B but doesn't have complete 6-digit code
+  const startsWithB = item?.itemCode?.startsWith('B');
+  const isCompleteBCode = /^B\d{6}$/.test(item?.itemCode || '');
+  const isPlaceholder = startsWithB && !isCompleteBCode;
 
   if (!item) return null;
 

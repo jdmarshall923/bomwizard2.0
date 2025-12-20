@@ -123,7 +123,9 @@ export async function processImport(
             code: itemCode,
             description: itemDescription,
             isManufactured: false,
-            isPlaceholder: itemCode.startsWith('B') && /^B\d+$/.test(itemCode) || itemCode.startsWith('UNKNOWN'),
+            // Complete B code = B + exactly 6 numbers (e.g., B123456)
+            // Placeholder = starts with B but doesn't have complete 6-digit code, or starts with UNKNOWN
+            isPlaceholder: (itemCode.startsWith('B') && !/^B\d{6}$/.test(itemCode)) || itemCode.startsWith('UNKNOWN'),
           };
           itemId = await createDocument<Item>('items', itemData);
         } else {
