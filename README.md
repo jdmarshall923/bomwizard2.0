@@ -6,18 +6,13 @@ Modern BOM (Bill of Materials) cost control and version management system built 
 
 | Phase | Status |
 |-------|--------|
-| Phase 1: Foundation | ✅ Complete |
-| Phase 2: Import System | ✅ Complete |
-| Phase 3: BOM Explorer | ✅ Complete |
-| Phase 3.7: Batch Item Entry | ✅ Complete |
-| Phase 4: BOM Control Panel | ✅ Complete |
-| Phase 5: Version Control | ✅ Complete |
-| Phase 6: Cost Analysis | ✅ Complete |
-| Phase 7: New Part Tracker | ✅ Complete |
-| Phase 8: Polish & Launch | ✅ Complete |
-| Phase 9: AI Integration | 📋 Planned |
+| Phase 1-8 | ✅ Complete |
+| **Phase 9: Project Management** | 📋 **Next** |
+| Phase 10: Parts Order Timeline | 📋 Planned |
+| Phase 11: Final Polish & Deploy | 📋 Planned |
+| Phase 12: AI Integration | 📋 Future |
 
-**📄 See [FULL_PROJECT_PLAN.md](./FULL_PROJECT_PLAN.md) for complete documentation of all phases.**
+**📄 See [docs/plans/](./docs/plans/) for complete phase documentation and tracking.**
 
 ---
 
@@ -29,7 +24,9 @@ Modern BOM (Bill of Materials) cost control and version management system built 
 - **Version Control** - Track all changes with visual diffs and history
 - **Cost Analysis** - Interactive charts and cost driver analysis
 - **New Part Tracker** - Kanban board: Design → Engineering → Procurement → Complete
-- **AI Assistant** - (Phase 9) Natural language BOM queries and suggestions
+- **Project Management** - (Phase 9) PACE gates and project metrics
+- **Parts Timeline** - (Phase 10) Gantt chart for order tracking
+- **AI Assistant** - (Phase 12) Natural language BOM queries and suggestions
 
 ---
 
@@ -87,16 +84,20 @@ app/
 ├── (dashboard)/
 │   ├── projects/               # Project list
 │   └── project/[projectId]/
+│       ├── overview/           # Project Overview (Phase 9)
 │       ├── bom/                # BOM Control Panel
+│       ├── configure/          # Group selection
 │       ├── costs/              # Cost Analysis
 │       ├── versions/           # Version History
 │       ├── new-parts/          # New Part Tracker
+│       ├── parts-timeline/     # Parts Timeline (Phase 10)
 │       └── import/             # Import Wizard
 
 components/
 ├── bom/                        # BOM components
 ├── charts/                     # Cost analysis charts
 ├── new-parts/                  # New Part Tracker
+├── projects/                   # Project management
 └── ui/                         # shadcn/ui components
 
 lib/
@@ -106,6 +107,7 @@ lib/
 
 types/                          # TypeScript interfaces
 functions/src/                  # Cloud Functions
+docs/plans/                     # Phase documentation
 ```
 
 ---
@@ -136,7 +138,8 @@ npm run deploy:rules        # Security rules only
 
 ## Documentation
 
-- **[FULL_PROJECT_PLAN.md](./FULL_PROJECT_PLAN.md)** - Complete phase documentation, data models, workflows
+- **[docs/plans/](./docs/plans/)** - All phase plans with status tracking
+- **[docs/plans/upcoming/](./docs/plans/upcoming/)** - Next phases to implement
 - **[scripts/README.md](./scripts/README.md)** - Database setup scripts
 - **[public/test-data/README.md](./public/test-data/README.md)** - Test data files
 
@@ -148,5 +151,5 @@ npm run deploy:rules        # Security rules only
 
 ---
 
-**Last Updated**: December 2024  
-**Version**: 0.8.0
+**Last Updated**: December 20, 2024  
+**Version**: 0.9.0
