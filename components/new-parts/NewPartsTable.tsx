@@ -1,0 +1,511 @@
+'use client';
+
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { NewPart } from '@/types/newPart';
+import { NewPartStatus } from '@/types/bom';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { InlineEditCell } from './InlineEditCell';
+import {
+  ChevronRight,
+  ChevronDown,
+  MoreHorizontal,
+  AlertTriangle,
+  CheckCircle2,
+  Ship,
+  Plane,
+  Trash2,
+  ExternalLink,
+  Package,
+} from 'lucide-react';
+
+// Row height for virtualization
+const ROW_HEIGHT = 44;
+const GROUP_HEADER_HEIGHT = 36;
+
+// Status colors and labels
+const STATUS_CONFIG: Record<NewPartStatus, { label: string; color: string; bg: string }> = {
+  added: { label: 'Added', color: 'text-[var(--accent-blue)]', bg: 'bg-[var(--accent-blue)]/10' },
+  pending: { label: 'Pending', color: 'text-[var(--text-tertiary)]', bg: 'bg-[var(--bg-tertiary)]' },
+  design: { label: 'Design', color: 'text-purple-400', bg: 'bg-purple-400/10' },
+  engineering: { label: 'Engineering', color: 'text-cyan-400', bg: 'bg-cyan-400/10' },
+  procurement: { label: 'Procurement', color: 'text-[var(--accent-orange)]', bg: 'bg-[var(--accent-orange)]/10' },
+  complete: { label: 'Complete', color: 'text-[var(--accent-green)]', bg: 'bg-[var(--accent-green)]/10' },
+  on_hold: { label: 'On Hold', color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
+  cancelled: { label: 'Cancelled', color: 'text-[var(--accent-red)]', bg: 'bg-[var(--accent-red)]/10' },
+};
+
+type GroupByOption = 'none' | 'group' | 'status' | 'vendor';
+
+interface GroupedRow {
+  type: 'group';
+  key: string;
+  label: string;
+  count: number;
+  isExpanded: boolean;
+}
+
+interface PartRow {
+  type: 'part';
+  part: NewPart;
+  groupKey: string;
+}
+
+type VirtualRow = GroupedRow | PartRow;
+
+interface NewPartsTableProps {
+  parts: NewPart[];
+  selectedIds: Set<string>;
+  onToggleSelection: (partId: string) => void;
+  onSelectAll: () => void;
+  onClearSelection: () => void;
+  onPartClick: (part: NewPart) => void;
+  onUpdatePart: (partId: string, updates: Partial<NewPart>) => void;
+  onDeletePart: (partId: string) => void;
+  onMoveStatus: (partId: string, newStatus: NewPartStatus) => void;
+  groupBy: GroupByOption;
+  className?: string;
+}
+
+export function NewPartsTable({
+  parts,
+  selectedIds,
+  onToggleSelection,
+  onSelectAll,
+  onClearSelection,
+  onPartClick,
+  onUpdatePart,
+  onDeletePart,
+  onMoveStatus,
+  groupBy,
+  className,
+}: NewPartsTableProps) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set()); // Track collapsed, not expanded
+
+  // Get group key for a part
+  const getGroupKey = useCallback((part: NewPart): string => {
+    switch (groupBy) {
+      case 'group': return part.groupCode || 'Ungrouped';
+      case 'status': return part.status;
+      case 'vendor': return part.vendorName || 'No Vendor';
+      default: return 'all';
+    }
+  }, [groupBy]);
+
+  // Reset collapsed groups when groupBy changes
+  useEffect(() => {
+    setCollapsedGroups(new Set());
+  }, [groupBy]);
+
+  // Group parts and create virtual rows
+  const virtualRows = useMemo(() => {
+    if (groupBy === 'none') {
+      return parts.map(part => ({ type: 'part' as const, part, groupKey: 'all' }));
+    }
+
+    // Group parts
+    const groups = new Map<string, NewPart[]>();
+    parts.forEach(part => {
+      const key = getGroupKey(part);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(part);
+    });
+
+    // Sort groups
+    const sortedGroups = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+    // Build virtual rows with groups (expanded by default, track collapsed)
+    const rows: VirtualRow[] = [];
+    sortedGroups.forEach(([key, groupParts]) => {
+      const isExpanded = !collapsedGroups.has(key); // Default expanded
+      rows.push({
+        type: 'group',
+        key,
+        label: groupBy === 'status' ? STATUS_CONFIG[key as NewPartStatus]?.label || key : key,
+        count: groupParts.length,
+        isExpanded,
+      });
+      if (isExpanded) {
+        groupParts.forEach(part => {
+          rows.push({ type: 'part', part, groupKey: key });
+        });
+      }
+    });
+
+    return rows;
+  }, [parts, groupBy, collapsedGroups, getGroupKey]);
+
+  const toggleGroup = useCallback((key: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key); // Was collapsed, now expand
+      } else {
+        next.add(key); // Was expanded, now collapse
+      }
+      return next;
+    });
+  }, []);
+
+  // Memoized callbacks for virtualizer
+  const estimateSize = useCallback(
+    (index: number) => virtualRows[index]?.type === 'group' ? GROUP_HEADER_HEIGHT : ROW_HEIGHT,
+    [virtualRows]
+  );
+  
+  const getItemKey = useCallback(
+    (index: number) => {
+      const row = virtualRows[index];
+      if (!row) return `row-${index}`;
+      return row.type === 'group' ? `group-${row.key}` : `part-${row.part.id}`;
+    },
+    [virtualRows]
+  );
+
+  // Virtualizer
+  const virtualizer = useVirtualizer({
+    count: virtualRows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize,
+    overscan: 15,
+    getItemKey,
+  });
+
+  const allSelected = parts.length > 0 && selectedIds.size === parts.length;
+  const someSelected = selectedIds.size > 0 && selectedIds.size < parts.length;
+
+  return (
+    <div className={cn('flex flex-col border border-[var(--border-subtle)] rounded-lg bg-[var(--bg-secondary)]/50 backdrop-blur-sm overflow-hidden', className)}>
+      {/* Fixed Header */}
+      <div className="flex items-center h-10 px-2 border-b border-[var(--border-subtle)] bg-[var(--bg-tertiary)]/50 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
+        <div className="w-10 flex-shrink-0 flex items-center justify-center">
+          <Checkbox
+            checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+            onCheckedChange={() => allSelected ? onClearSelection() : onSelectAll()}
+            className="h-4 w-4"
+          />
+        </div>
+        <div className="w-24 flex-shrink-0 px-2">Code</div>
+        <div className="flex-1 min-w-[200px] px-2">Description</div>
+        <div className="w-28 flex-shrink-0 px-2">Status</div>
+        <div className="w-28 flex-shrink-0 px-2">Vendor</div>
+        <div className="w-20 flex-shrink-0 px-2 text-center">Lead</div>
+        <div className="w-16 flex-shrink-0 px-2 text-center">Frt</div>
+        <div className="w-16 flex-shrink-0 px-2 text-center">Scrap</div>
+        <div className="w-24 flex-shrink-0 px-2">Final Code</div>
+        <div className="w-10 flex-shrink-0" />
+      </div>
+
+      {/* Virtualized Body */}
+      <div
+        ref={parentRef}
+        className="flex-1 overflow-auto"
+        style={{ height: 'calc(100% - 40px)' }}
+      >
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualItem) => {
+            const row = virtualRows[virtualItem.index];
+
+            if (row.type === 'group') {
+              return (
+                <div
+                  key={virtualItem.key}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualItem.size}px`,
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                >
+                  <GroupHeader
+                    label={row.label}
+                    count={row.count}
+                    isExpanded={row.isExpanded}
+                    onToggle={() => toggleGroup(row.key)}
+                  />
+                </div>
+              );
+            }
+
+            const part = row.part;
+            const isSelected = selectedIds.has(part.id);
+            const hasMissingInfo = !part.vendorName || !part.quotedLeadTimeDays;
+
+            return (
+              <div
+                key={virtualItem.key}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualItem.size}px`,
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                <PartRowComponent
+                  part={part}
+                  isSelected={isSelected}
+                  hasMissingInfo={hasMissingInfo}
+                  onToggleSelection={() => onToggleSelection(part.id)}
+                  onClick={() => onPartClick(part)}
+                  onUpdate={(updates) => onUpdatePart(part.id, updates)}
+                  onDelete={() => onDeletePart(part.id)}
+                  onMoveStatus={(status) => onMoveStatus(part.id, status)}
+                  isGrouped={groupBy !== 'none'}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Footer with selection info */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between h-10 px-4 border-t border-[var(--border-subtle)] bg-[var(--accent-blue)]/5">
+          <span className="text-sm text-[var(--text-secondary)]">
+            {selectedIds.size} of {parts.length} selected
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={onClearSelection} className="h-7 text-xs">
+              Clear Selection
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Group Header Component
+function GroupHeader({
+  label,
+  count,
+  isExpanded,
+  onToggle,
+}: {
+  label: string;
+  count: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div
+      onClick={onToggle}
+      className="flex items-center h-full px-2 bg-[var(--bg-tertiary)]/70 border-b border-[var(--border-subtle)] cursor-pointer hover:bg-[var(--bg-tertiary)] transition-colors"
+    >
+      <div className="w-10 flex-shrink-0 flex items-center justify-center">
+        {isExpanded ? (
+          <ChevronDown className="h-4 w-4 text-[var(--text-tertiary)]" />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-[var(--text-tertiary)]" />
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <Package className="h-4 w-4 text-[var(--accent-blue)]" />
+        <span className="font-medium text-sm text-[var(--text-primary)]">{label}</span>
+        <Badge className="h-5 px-1.5 text-xs bg-[var(--bg-tertiary)] text-[var(--text-secondary)]">
+          {count}
+        </Badge>
+      </div>
+    </div>
+  );
+}
+
+// Part Row Component - memoized to prevent unnecessary re-renders
+const PartRowComponent = React.memo(function PartRowComponent({
+  part,
+  isSelected,
+  hasMissingInfo,
+  onToggleSelection,
+  onClick,
+  onUpdate,
+  onDelete,
+  onMoveStatus,
+  isGrouped,
+}: {
+  part: NewPart;
+  isSelected: boolean;
+  hasMissingInfo: boolean;
+  onToggleSelection: () => void;
+  onClick: () => void;
+  onUpdate: (updates: Partial<NewPart>) => void;
+  onDelete: () => void;
+  onMoveStatus: (status: NewPartStatus) => void;
+  isGrouped: boolean;
+}) {
+  const statusConfig = STATUS_CONFIG[part.status] || STATUS_CONFIG.pending;
+  const freightDays = part.freightType === 'air' ? (part.airFreightDays || 5) : (part.seaFreightDays || 35);
+  const totalLead = (part.quotedLeadTimeDays || 0) + freightDays;
+
+  return (
+    <div
+      className={cn(
+        'flex items-center h-full px-2 border-b border-[var(--border-subtle)] hover:bg-[var(--bg-tertiary)]/50 transition-colors group',
+        isSelected && 'bg-[var(--accent-blue)]/5',
+        isGrouped && 'pl-6'
+      )}
+    >
+      {/* Checkbox */}
+      <div className="w-10 flex-shrink-0 flex items-center justify-center">
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={onToggleSelection}
+          onClick={(e) => e.stopPropagation()}
+          className="h-4 w-4"
+        />
+      </div>
+
+      {/* Code */}
+      <div
+        className="w-24 flex-shrink-0 px-2 font-mono text-sm text-[var(--accent-blue)] cursor-pointer hover:underline"
+        onClick={onClick}
+      >
+        {part.placeholderCode}
+      </div>
+
+      {/* Description */}
+      <div className="flex-1 min-w-[200px] px-2 text-sm truncate" title={part.description}>
+        {part.description}
+      </div>
+
+      {/* Status */}
+      <div className="w-28 flex-shrink-0 px-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className={cn(
+              'px-2 py-0.5 rounded text-xs font-medium transition-colors',
+              statusConfig.bg,
+              statusConfig.color,
+              'hover:opacity-80'
+            )}>
+              {statusConfig.label}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="bg-[var(--bg-secondary)] border-[var(--border-subtle)]">
+            {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+              key !== 'cancelled' && (
+                <DropdownMenuItem
+                  key={key}
+                  onClick={() => onMoveStatus(key as NewPartStatus)}
+                  className={cn('text-xs', part.status === key && 'bg-[var(--bg-tertiary)]')}
+                >
+                  {config.label}
+                </DropdownMenuItem>
+              )
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Vendor - Inline Edit */}
+      <div className="w-28 flex-shrink-0 px-2">
+        <InlineEditCell
+          value={part.vendorName || ''}
+          placeholder="Add..."
+          onSave={(value) => onUpdate({ vendorName: value })}
+          className="text-xs"
+        />
+      </div>
+
+      {/* Lead Time - Inline Edit */}
+      <div className="w-20 flex-shrink-0 px-2 text-center">
+        <InlineEditCell
+          value={part.quotedLeadTimeDays?.toString() || ''}
+          placeholder="—"
+          onSave={(value) => onUpdate({ quotedLeadTimeDays: parseInt(value) || undefined })}
+          type="number"
+          suffix="d"
+          className="text-xs text-center w-12"
+        />
+      </div>
+
+      {/* Freight Toggle */}
+      <div className="w-16 flex-shrink-0 px-2 flex justify-center">
+        <button
+          onClick={() => onUpdate({ freightType: part.freightType === 'air' ? 'sea' : 'air' })}
+          className={cn(
+            'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors',
+            part.freightType === 'air'
+              ? 'bg-sky-400/20 text-sky-400'
+              : 'bg-teal-500/20 text-teal-500'
+          )}
+        >
+          {part.freightType === 'air' ? (
+            <><Plane className="h-3 w-3" /></>
+          ) : (
+            <><Ship className="h-3 w-3" /></>
+          )}
+        </button>
+      </div>
+
+      {/* Scrap Rate */}
+      <div className="w-16 flex-shrink-0 px-2 text-center">
+        <InlineEditCell
+          value={part.scrapRate?.toString() || '5'}
+          placeholder="5"
+          onSave={(value) => onUpdate({ scrapRate: parseFloat(value) || 5 })}
+          type="number"
+          suffix="%"
+          className="text-xs text-center w-10"
+        />
+      </div>
+
+      {/* Final Code */}
+      <div className="w-24 flex-shrink-0 px-2 font-mono text-xs text-[var(--accent-green)]">
+        {part.finalItemCode || '-'}
+      </div>
+
+      {/* Actions + Status Icon */}
+      <div className="w-10 flex-shrink-0 flex items-center justify-center gap-1">
+        {hasMissingInfo ? (
+          <AlertTriangle className="h-3.5 w-3.5 text-[var(--accent-orange)]" />
+        ) : (
+          <CheckCircle2 className="h-3.5 w-3.5 text-[var(--accent-green)] opacity-50" />
+        )}
+        
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="p-1 opacity-0 group-hover:opacity-100 hover:bg-[var(--bg-tertiary)] rounded transition-opacity">
+              <MoreHorizontal className="h-4 w-4 text-[var(--text-tertiary)]" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="bg-[var(--bg-secondary)] border-[var(--border-subtle)]">
+            <DropdownMenuItem onClick={onClick} className="text-xs">
+              <ExternalLink className="h-3 w-3 mr-2" />
+              View Details
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={onDelete}
+              className="text-xs text-[var(--accent-red)] focus:text-[var(--accent-red)]"
+            >
+              <Trash2 className="h-3 w-3 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  );
+});
+
