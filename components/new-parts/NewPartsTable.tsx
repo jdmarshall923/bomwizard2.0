@@ -204,11 +204,10 @@ export function NewPartsTable({
 
   return (
     <div className={cn('flex flex-col border border-[var(--border-subtle)] rounded-lg bg-[var(--bg-secondary)]/50 backdrop-blur-sm overflow-hidden', className)}>
-      {/* Fixed Header - scrolls horizontally with body */}
+      {/* Fixed Header - only scrolls via body sync, not independently */}
       <div 
         ref={headerRef}
-        className="h-10 border-b border-[var(--border-subtle)] bg-[var(--bg-tertiary)]/50 overflow-x-auto overflow-y-hidden"
-        style={{ scrollbarWidth: 'none' }}
+        className="h-10 border-b border-[var(--border-subtle)] bg-[var(--bg-tertiary)]/50 overflow-hidden"
       >
         <div className="flex items-center h-full px-2 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider min-w-max">
           <div className="w-10 flex-shrink-0 flex items-center justify-center">
@@ -549,65 +548,186 @@ const PartRowComponent = React.memo(function PartRowComponent({
         </div>
       )}
 
-      {/* Final Code */}
+      {/* Final Code - Editable */}
       {isColumnVisible('finalItemCode') && (
-        <div className="w-24 flex-shrink-0 px-2 font-mono text-xs text-[var(--accent-green)]">
-          {part.finalItemCode || '—'}
+        <div className="w-24 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.finalItemCode || ''}
+            placeholder="Add code"
+            onSave={(value) => onUpdate({ finalItemCode: value || undefined })}
+            className="text-xs font-mono text-[var(--accent-green)]"
+          />
         </div>
       )}
 
-      {/* Drawing columns */}
+      {/* Drawing columns - Editable */}
       {isColumnVisible('drawingNumber') && (
-        <div className="w-24 flex-shrink-0 px-2 text-xs font-mono">{part.drawingNumber || '—'}</div>
+        <div className="w-24 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.drawingNumber || ''}
+            placeholder="Add #"
+            onSave={(value) => onUpdate({ drawingNumber: value || undefined })}
+            className="text-xs font-mono"
+          />
+        </div>
       )}
       {isColumnVisible('drawingRevision') && (
-        <div className="w-16 flex-shrink-0 px-2 text-xs">{part.drawingRevision || '—'}</div>
+        <div className="w-16 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.drawingRevision || ''}
+            placeholder="—"
+            onSave={(value) => onUpdate({ drawingRevision: value || undefined })}
+            className="text-xs"
+          />
+        </div>
       )}
       {isColumnVisible('drawingWorkflowState') && (
-        <div className="w-24 flex-shrink-0 px-2 text-xs capitalize">{part.drawingWorkflowState?.replace('_', ' ') || '—'}</div>
+        <div className="w-24 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.drawingWorkflowState || ''}
+            placeholder="—"
+            onSave={(value) => onUpdate({ drawingWorkflowState: value || undefined })}
+            className="text-xs capitalize"
+          />
+        </div>
       )}
 
-      {/* Assignment columns */}
+      {/* Assignment columns - Editable */}
       {isColumnVisible('projectCoordinator') && (
-        <div className="w-24 flex-shrink-0 px-2 text-xs truncate">{part.projectCoordinator || '—'}</div>
+        <div className="w-24 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.projectCoordinator || ''}
+            placeholder="Assign"
+            onSave={(value) => onUpdate({ projectCoordinator: value || undefined })}
+            className="text-xs truncate"
+          />
+        </div>
       )}
       {isColumnVisible('buyer') && (
-        <div className="w-24 flex-shrink-0 px-2 text-xs truncate">{part.buyer || '—'}</div>
+        <div className="w-24 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.buyer || ''}
+            placeholder="Assign"
+            onSave={(value) => onUpdate({ buyer: value || undefined })}
+            className="text-xs truncate"
+          />
+        </div>
       )}
       {isColumnVisible('sqe') && (
-        <div className="w-24 flex-shrink-0 px-2 text-xs truncate">{part.sqe || '—'}</div>
+        <div className="w-24 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.sqe || ''}
+            placeholder="Assign"
+            onSave={(value) => onUpdate({ sqe: value || undefined })}
+            className="text-xs truncate"
+          />
+        </div>
       )}
 
-      {/* Pricing columns */}
+      {/* Pricing columns - Editable */}
       {isColumnVisible('quotedPrice') && (
-        <div className="w-20 flex-shrink-0 px-2 text-xs text-right">
-          {part.quotedPrice ? `${part.currency || '£'}${part.quotedPrice.toFixed(2)}` : '—'}
+        <div className="w-20 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.quotedPrice?.toString() || ''}
+            placeholder="—"
+            onSave={(value) => onUpdate({ quotedPrice: parseFloat(value) || undefined })}
+            type="number"
+            className="text-xs text-right w-14"
+          />
         </div>
       )}
       {isColumnVisible('currency') && (
-        <div className="w-16 flex-shrink-0 px-2 text-xs">{part.currency || 'GBP'}</div>
+        <div className="w-16 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.currency || 'GBP'}
+            placeholder="GBP"
+            onSave={(value) => onUpdate({ currency: value || 'GBP' })}
+            className="text-xs"
+          />
+        </div>
       )}
 
-      {/* Sprint columns */}
+      {/* Sprint columns - Editable */}
       {isColumnVisible('sprintQuantity') && (
-        <div className="w-20 flex-shrink-0 px-2 text-xs text-right">{part.sprintQuantity || '—'}</div>
+        <div className="w-20 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.sprintQuantity?.toString() || ''}
+            placeholder="—"
+            onSave={(value) => onUpdate({ sprintQuantity: parseInt(value) || undefined })}
+            type="number"
+            className="text-xs text-right w-14"
+          />
+        </div>
       )}
       {isColumnVisible('sprintTargetDate') && (
-        <div className="w-24 flex-shrink-0 px-2 text-xs">{formatDate(part.sprintTargetDate)}</div>
+        <div className="w-24 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.sprintTargetDate ? (part.sprintTargetDate as any).toDate?.().toISOString().split('T')[0] || '' : ''}
+            placeholder="Set date"
+            onSave={(value) => {
+              if (value) {
+                // Convert to Firestore Timestamp format
+                const date = new Date(value);
+                onUpdate({ sprintTargetDate: { toDate: () => date } as any });
+              } else {
+                onUpdate({ sprintTargetDate: undefined });
+              }
+            }}
+            type="date"
+            className="text-xs"
+          />
+        </div>
       )}
       {isColumnVisible('sprintPoNumber') && (
-        <div className="w-24 flex-shrink-0 px-2 text-xs font-mono">{part.sprintPoNumber || '—'}</div>
+        <div className="w-24 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.sprintPoNumber || ''}
+            placeholder="Add PO"
+            onSave={(value) => onUpdate({ sprintPoNumber: value || undefined })}
+            className="text-xs font-mono"
+          />
+        </div>
       )}
 
-      {/* Production columns */}
+      {/* Production columns - Editable */}
       {isColumnVisible('massProductionQuantity') && (
-        <div className="w-20 flex-shrink-0 px-2 text-xs text-right">{part.massProductionQuantity || '—'}</div>
+        <div className="w-20 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.massProductionQuantity?.toString() || ''}
+            placeholder="—"
+            onSave={(value) => onUpdate({ massProductionQuantity: parseInt(value) || undefined })}
+            type="number"
+            className="text-xs text-right w-14"
+          />
+        </div>
       )}
       {isColumnVisible('productionTargetDate') && (
-        <div className="w-24 flex-shrink-0 px-2 text-xs">{formatDate(part.productionTargetDate)}</div>
+        <div className="w-24 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.productionTargetDate ? (part.productionTargetDate as any).toDate?.().toISOString().split('T')[0] || '' : ''}
+            placeholder="Set date"
+            onSave={(value) => {
+              if (value) {
+                const date = new Date(value);
+                onUpdate({ productionTargetDate: { toDate: () => date } as any });
+              } else {
+                onUpdate({ productionTargetDate: undefined });
+              }
+            }}
+            type="date"
+            className="text-xs"
+          />
+        </div>
       )}
       {isColumnVisible('productionPoNumber') && (
-        <div className="w-24 flex-shrink-0 px-2 text-xs font-mono">{part.productionPoNumber || '—'}</div>
+        <div className="w-24 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.productionPoNumber || ''}
+            placeholder="Add PO"
+            onSave={(value) => onUpdate({ productionPoNumber: value || undefined })}
+            className="text-xs font-mono"
+          />
+        </div>
       )}
 
       {/* Actions + Status Icon */}

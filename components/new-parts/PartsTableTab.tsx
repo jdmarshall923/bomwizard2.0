@@ -209,6 +209,11 @@ export function PartsTableTab({
     clearSelection();
   };
 
+  const handleBulkPaste = async (field: keyof NewPart, value: any) => {
+    await onBulkUpdate(Array.from(selectedIds), { [field]: value });
+    clearSelection();
+  };
+
   // Get unique groups for filter
   const uniqueGroups = useMemo(() => {
     const groupSet = new Set(parts.map((p) => p.groupCode || UNASSIGNED_GROUP_CODE));
@@ -335,6 +340,7 @@ export function PartsTableTab({
             onBulkUpdateFreight={handleBulkUpdateFreight}
             onBulkChangeStatus={handleBulkChangeStatus}
             onBulkAssignGroup={handleBulkAssignGroup}
+            onBulkPaste={handleBulkPaste}
             groups={groups}
           />
         </div>

@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -31,13 +32,61 @@ import {
   Building2,
   Check,
   ChevronDown,
+  ClipboardPaste,
   Package,
   Plane,
   Ship,
   Truck,
   X,
 } from 'lucide-react';
-import { NewPartStatus } from '@/types/newPart';
+import { NewPartStatus, NewPart } from '@/types/newPart';
+
+// Helper to parse various date formats
+function parseDate(input: string): string | null {
+  const trimmed = input.trim();
+  
+  // Try ISO format first (YYYY-MM-DD)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  
+  // Try DD/MM/YYYY or DD-MM-YYYY
+  const ddmmyyyyMatch = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (ddmmyyyyMatch) {
+    const [, day, month, year] = ddmmyyyyMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  
+  // Try natural language dates
+  const date = new Date(trimmed);
+  if (!isNaN(date.getTime())) {
+    return date.toISOString().split('T')[0];
+  }
+  
+  return null;
+}
+
+// Fields that can be bulk edited via paste
+type BulkPasteField = 
+  | 'sprintQuantity' 
+  | 'massProductionQuantity' 
+  | 'sprintTargetDate' 
+  | 'productionTargetDate'
+  | 'quotedPrice'
+  | 'baseLeadTimeDays'
+  | 'sprintPoNumber'
+  | 'productionPoNumber';
+
+const BULK_PASTE_FIELDS: { value: BulkPasteField; label: string; type: 'number' | 'date' | 'text' }[] = [
+  { value: 'sprintQuantity', label: 'Sprint Quantity', type: 'number' },
+  { value: 'massProductionQuantity', label: 'Production Quantity', type: 'number' },
+  { value: 'sprintTargetDate', label: 'Sprint Target Date', type: 'date' },
+  { value: 'productionTargetDate', label: 'Production Target Date', type: 'date' },
+  { value: 'quotedPrice', label: 'Quoted Price', type: 'number' },
+  { value: 'baseLeadTimeDays', label: 'Lead Time (days)', type: 'number' },
+  { value: 'sprintPoNumber', label: 'Sprint PO Number', type: 'text' },
+  { value: 'productionPoNumber', label: 'Production PO Number', type: 'text' },
+];
 
 interface BulkActionsProps {
   selectedCount: number;
@@ -48,6 +97,7 @@ interface BulkActionsProps {
   onBulkUpdateFreight: (freightType: 'sea' | 'air') => Promise<void>;
   onBulkChangeStatus: (status: NewPartStatus) => Promise<void>;
   onBulkAssignGroup: (groupCode: string) => Promise<void>;
+  onBulkPaste?: (field: keyof NewPart, value: any) => Promise<void>;
   groups: { code: string; description?: string }[];
   className?: string;
 }
@@ -61,17 +111,23 @@ export function BulkActions({
   onBulkUpdateFreight,
   onBulkChangeStatus,
   onBulkAssignGroup,
+  onBulkPaste,
   groups,
   className,
 }: BulkActionsProps) {
   const [showVendorDialog, setShowVendorDialog] = useState(false);
   const [showOrderDialog, setShowOrderDialog] = useState(false);
   const [showGroupDialog, setShowGroupDialog] = useState(false);
+  const [showPasteDialog, setShowPasteDialog] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
   // Vendor dialog state
   const [vendorName, setVendorName] = useState('');
   const [vendorCode, setVendorCode] = useState('');
+
+  // Bulk paste dialog state
+  const [pasteField, setPasteField] = useState<BulkPasteField>('sprintQuantity');
+  const [pasteValue, setPasteValue] = useState('');
 
   // Order dialog state
   const [poNumber, setPoNumber] = useState('');
@@ -119,6 +175,44 @@ export function BulkActions({
       await onBulkAssignGroup(selectedGroup);
       setShowGroupDialog(false);
       setSelectedGroup('');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleBulkPaste = async () => {
+    if (!pasteValue || !onBulkPaste) return;
+    setIsProcessing(true);
+    try {
+      const fieldConfig = BULK_PASTE_FIELDS.find(f => f.value === pasteField);
+      if (!fieldConfig) return;
+
+      let parsedValue: any;
+      
+      if (fieldConfig.type === 'number') {
+        parsedValue = parseFloat(pasteValue.replace(/[^\d.-]/g, ''));
+        if (isNaN(parsedValue)) {
+          alert('Please enter a valid number');
+          setIsProcessing(false);
+          return;
+        }
+      } else if (fieldConfig.type === 'date') {
+        // Try to parse various date formats
+        const date = parseDate(pasteValue);
+        if (!date) {
+          alert('Please enter a valid date (e.g., 2025-01-15 or 15/01/2025)');
+          setIsProcessing(false);
+          return;
+        }
+        // Convert to Firestore-like timestamp format
+        parsedValue = { toDate: () => new Date(date) };
+      } else {
+        parsedValue = pasteValue.trim();
+      }
+
+      await onBulkPaste(pasteField, parsedValue);
+      setShowPasteDialog(false);
+      setPasteValue('');
     } finally {
       setIsProcessing(false);
     }
@@ -252,6 +346,19 @@ export function BulkActions({
           <Package className="h-3.5 w-3.5" />
           Assign Group
         </Button>
+
+        {/* Bulk Paste */}
+        {onBulkPaste && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowPasteDialog(true)}
+            className="h-7 text-xs gap-1.5 hover:bg-[var(--bg-tertiary)]"
+          >
+            <ClipboardPaste className="h-3.5 w-3.5" />
+            Bulk Paste
+          </Button>
+        )}
 
         {/* Clear Selection */}
         <Button
@@ -399,6 +506,84 @@ export function BulkActions({
               className="bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)]"
             >
               {isProcessing ? 'Applying...' : `Assign ${selectedCount} parts`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Paste Dialog */}
+      <Dialog open={showPasteDialog} onOpenChange={setShowPasteDialog}>
+        <DialogContent className="sm:max-w-md bg-[var(--bg-secondary)] border-[var(--border-subtle)]">
+          <DialogHeader>
+            <DialogTitle>Bulk Paste to {selectedCount} parts</DialogTitle>
+            <DialogDescription>
+              Paste a value to apply to all selected parts. Great for adding quantities, dates, or PO numbers in bulk.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Field to Update</Label>
+              <Select value={pasteField} onValueChange={(v) => setPasteField(v as BulkPasteField)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BULK_PASTE_FIELDS.map((field) => (
+                    <SelectItem key={field.value} value={field.value}>
+                      {field.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>
+                Value to Apply
+                <span className="text-[var(--text-tertiary)] text-xs ml-2">
+                  ({BULK_PASTE_FIELDS.find(f => f.value === pasteField)?.type === 'date' 
+                    ? 'e.g., 2025-01-15 or 15/01/2025' 
+                    : BULK_PASTE_FIELDS.find(f => f.value === pasteField)?.type === 'number'
+                    ? 'enter a number'
+                    : 'enter text'})
+                </span>
+              </Label>
+              <Input
+                value={pasteValue}
+                onChange={(e) => setPasteValue(e.target.value)}
+                placeholder={
+                  BULK_PASTE_FIELDS.find(f => f.value === pasteField)?.type === 'date'
+                    ? '2025-01-15'
+                    : BULK_PASTE_FIELDS.find(f => f.value === pasteField)?.type === 'number'
+                    ? '100'
+                    : 'PX00057395'
+                }
+                type={BULK_PASTE_FIELDS.find(f => f.value === pasteField)?.type === 'date' ? 'date' : 'text'}
+                className="font-mono"
+                onPaste={(e) => {
+                  // Handle paste from clipboard
+                  const pasted = e.clipboardData.getData('text').trim();
+                  if (pasted) {
+                    setPasteValue(pasted);
+                    e.preventDefault();
+                  }
+                }}
+              />
+            </div>
+            <div className="text-xs text-[var(--text-tertiary)] bg-[var(--bg-tertiary)] p-3 rounded">
+              <strong>Tip:</strong> You can paste values directly from Excel or other spreadsheets. 
+              Select rows in this table, then paste the same value to apply to all selected parts at once.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPasteDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBulkPaste}
+              disabled={!pasteValue || isProcessing}
+              className="bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)]"
+            >
+              {isProcessing ? 'Applying...' : `Apply to ${selectedCount} parts`}
             </Button>
           </DialogFooter>
         </DialogContent>
