@@ -119,6 +119,8 @@ export type BomItemType =
 /**
  * New Part Status - tracks through design and procurement lifecycle
  * Used for items flagged as "New Part" during batch add
+ * 
+ * @deprecated Import NewPartStatus from '@/types/newPart' instead
  */
 export type NewPartStatus = 
   | 'pending'        // Flagged as new part but not yet in tracker
@@ -129,6 +131,23 @@ export type NewPartStatus =
   | 'complete'       // Final part code assigned, pricing confirmed
   | 'on_hold'        // Paused
   | 'cancelled';     // No longer needed
+
+/**
+ * Special group code for parts without a group assignment.
+ * Parts imported from PPL or created without a group go here.
+ * This is a system group that cannot be deleted or renamed.
+ */
+export const UNASSIGNED_GROUP_CODE = '__UNASSIGNED__';
+
+/**
+ * Unassigned group display info
+ */
+export const UNASSIGNED_GROUP_INFO = {
+  code: UNASSIGNED_GROUP_CODE,
+  description: 'Unassigned Parts',
+  displayName: 'Unassigned',
+  isSystemGroup: true,
+};
 
 /**
  * Item source (Purchased vs Manufactured)

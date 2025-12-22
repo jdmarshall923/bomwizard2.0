@@ -341,13 +341,26 @@ export async function batchAddItems(
                 quantity: item.quantity,
                 status: 'added',
                 priority: 'medium',
+                
+                // ERP defaults
+                inInfor: false,
+                
+                // Lead time defaults
+                seaFreightDays: 35,
+                airFreightDays: 5,
+                freightType: 'sea',
+                
+                // Legacy fields
                 requestedBy: 'system',
                 requestedAt: now,
                 designStatus: 'not_started',
                 engineeringStatus: 'not_started',
                 procurementStatus: 'not_started',
+                
+                // Metadata
                 createdAt: now,
                 updatedAt: now,
+                createdBy: 'system',
               };
 
               const newPartDocRef = await addDoc(newPartsRef, newPartData);

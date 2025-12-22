@@ -1,18 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { useNewParts } from '@/lib/hooks/useNewParts';
 import { useProject } from '@/lib/context/ProjectContext';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { createNewPart, syncBomItemsToNewParts } from '@/lib/bom/newPartService';
+import { createNewPart, syncBomItemsToNewParts, updateNewPart, fillMissingTargetDates } from '@/lib/bom/newPartService';
 import {
-  NewPartKanban,
   NewPartDetailDrawer,
-  NewPartStatsCards,
-  NewPartProgress,
+  PartsTableTab,
+  TimelineTab,
+  SummaryStatsBar,
 } from '@/components/new-parts';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PplImportDialog } from '@/components/import/PplImportDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,23 +33,21 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import {
   AlertCircle,
-  Filter,
-  Kanban,
-  List,
+  Calendar,
+  FileSpreadsheet,
   Plus,
   RefreshCw,
-  Search,
-  Sparkles,
   Table,
   X,
   Zap,
 } from 'lucide-react';
 import { NewPart } from '@/types/newPart';
+import { UNASSIGNED_GROUP_CODE } from '@/types/bom';
+import { Timestamp } from 'firebase/firestore';
 
 export default function NewPartsPage() {
   const params = useParams();
@@ -59,9 +57,7 @@ export default function NewPartsPage() {
 
   const {
     newParts,
-    partsByStatus,
     stats,
-    columns,
     isLoading,
     error,
     selectedPart,
@@ -71,18 +67,16 @@ export default function NewPartsPage() {
     completePart,
     deletePart,
     refresh,
-    filterPriority,
-    setFilterPriority,
-    searchQuery,
-    setSearchQuery,
-    filteredParts,
   } = useNewParts({ projectId });
 
-  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+  const [activeTab, setActiveTab] = useState<'table' | 'timeline'>('table');
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ synced: number; errors: string[] } | null>(null);
+  const [isFillingDates, setIsFillingDates] = useState(false);
+  const [fillDatesResult, setFillDatesResult] = useState<{ updated: number } | null>(null);
   const [newPartData, setNewPartData] = useState({
     placeholderCode: '',
     description: '',
@@ -91,6 +85,18 @@ export default function NewPartsPage() {
     priority: 'medium' as const,
     requestNotes: '',
   });
+
+  // Get unique groups from parts
+  const groups = useMemo(() => {
+    const groupSet = new Map<string, { code: string; description?: string }>();
+    newParts.forEach((part) => {
+      const code = part.groupCode || UNASSIGNED_GROUP_CODE;
+      if (!groupSet.has(code)) {
+        groupSet.set(code, { code, description: undefined });
+      }
+    });
+    return Array.from(groupSet.values()).sort((a, b) => a.code.localeCompare(b.code));
+  }, [newParts]);
 
   const handleSyncParts = async () => {
     setIsSyncing(true);
@@ -101,7 +107,6 @@ export default function NewPartsPage() {
       if (result.synced > 0) {
         refresh();
       }
-      // Clear result after 5 seconds
       setTimeout(() => setSyncResult(null), 5000);
     } catch (err) {
       console.error('Sync failed:', err);
@@ -110,22 +115,42 @@ export default function NewPartsPage() {
     setIsSyncing(false);
   };
 
+  const handleFillDates = async () => {
+    if (!project) return;
+    
+    setIsFillingDates(true);
+    setFillDatesResult(null);
+    try {
+      const result = await fillMissingTargetDates(projectId, project);
+      setFillDatesResult(result);
+      if (result.updated > 0) {
+        refresh();
+      }
+      setTimeout(() => setFillDatesResult(null), 5000);
+    } catch (err) {
+      console.error('Fill dates failed:', err);
+    }
+    setIsFillingDates(false);
+  };
+
   const handleCreatePart = async () => {
     if (!newPartData.placeholderCode || !newPartData.description) return;
 
     setIsCreating(true);
     try {
+      // Pass project to auto-fill target dates from PACE gates
       await createNewPart(
         projectId,
         {
           placeholderCode: newPartData.placeholderCode,
           description: newPartData.description,
-          groupCode: newPartData.groupCode,
+          groupCode: newPartData.groupCode || UNASSIGNED_GROUP_CODE,
           quantity: newPartData.quantity,
           priority: newPartData.priority,
           requestNotes: newPartData.requestNotes,
         },
-        user?.email || 'Unknown'
+        user?.email || 'Unknown',
+        project || undefined // Pass project for auto-filling target dates
       );
       setShowAddDialog(false);
       setNewPartData({
@@ -154,17 +179,28 @@ export default function NewPartsPage() {
     return `Bxxx${String(nextNum).padStart(3, '0')}`;
   };
 
+  // Handle bulk updates
+  const handleBulkUpdate = async (partIds: string[], updates: Partial<NewPart>) => {
+    const promises = partIds.map((id) => updatePartDetails(id, updates));
+    await Promise.all(promises);
+  };
+
+  // Handle stats filter click
+  const handleStatsFilterClick = (filter: string) => {
+    setActiveTab('table');
+    // The PartsTableTab will handle the filter internally
+  };
+
   if (projectLoading || isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between p-6">
           <div>
             <div className="h-8 w-48 bg-[var(--bg-tertiary)] rounded animate-pulse" />
             <div className="h-4 w-64 bg-[var(--bg-tertiary)] rounded animate-pulse mt-2" />
           </div>
         </div>
-        <NewPartStatsCards stats={stats} isLoading={true} />
-        <div className="h-96 bg-[var(--bg-secondary)]/50 rounded-xl animate-pulse" />
+        <div className="flex-1 bg-[var(--bg-secondary)]/50 animate-pulse" />
       </div>
     );
   }
@@ -183,18 +219,13 @@ export default function NewPartsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 p-6 pb-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-bold">New Part Tracker</h1>
-            <Badge className="bg-[var(--accent-blue)]/10 text-[var(--accent-blue)] border-[var(--accent-blue)]/30">
-              Phase 7
-            </Badge>
-          </div>
-          <p className="text-[var(--text-secondary)] mt-1">
-            Track new parts through design, engineering, and procurement
+          <h1 className="text-2xl font-bold">New Parts Tracker</h1>
+          <p className="text-[var(--text-secondary)] text-sm mt-1">
+            Track new parts through design, engineering, and procurement • {newParts.length} parts
           </p>
         </div>
 
@@ -210,14 +241,34 @@ export default function NewPartsPage() {
             <Zap className={cn("h-4 w-4 mr-2", isSyncing && "animate-pulse")} />
             {isSyncing ? 'Syncing...' : 'Sync BOM'}
           </Button>
-          <Button onClick={refresh} variant="outline" size="sm" className="border-[var(--border-subtle)]">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
+          
+          <Button 
+            onClick={handleFillDates} 
+            variant="outline" 
+            size="sm" 
+            className="border-[var(--border-subtle)]"
+            disabled={isFillingDates || !project?.gates?.sprint?.date}
+            title="Fill target dates from PACE gates (Sprint MRD = 2 weeks before Sprint)"
+          >
+            <Calendar className={cn("h-4 w-4 mr-2", isFillingDates && "animate-pulse")} />
+            {isFillingDates ? 'Filling...' : 'Fill Dates'}
           </Button>
+          
+          <Button 
+            onClick={() => setShowImportDialog(true)} 
+            variant="outline" 
+            size="sm" 
+            className="border-[var(--border-subtle)]"
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            Import PPL
+          </Button>
+
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
               <Button
                 className="bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)]"
+                size="sm"
                 onClick={() => {
                   setNewPartData({
                     ...newPartData,
@@ -226,7 +277,7 @@ export default function NewPartsPage() {
                 }}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Add New Part
+                Add Part
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md bg-[var(--bg-secondary)] border-[var(--border-subtle)]">
@@ -258,7 +309,7 @@ export default function NewPartsPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Description</Label>
+                  <Label>Description *</Label>
                   <Input
                     value={newPartData.description}
                     onChange={(e) => setNewPartData({ ...newPartData, description: e.target.value })}
@@ -322,7 +373,7 @@ export default function NewPartsPage() {
       {/* Sync Result Notification */}
       {syncResult && (
         <div className={cn(
-          "flex items-center gap-2 p-3 rounded-lg border",
+          "flex items-center gap-2 mx-6 mb-4 p-3 rounded-lg border",
           syncResult.synced > 0 
             ? "bg-[var(--accent-green)]/10 border-[var(--accent-green)]/30" 
             : syncResult.errors.length > 0 
@@ -357,235 +408,117 @@ export default function NewPartsPage() {
         </div>
       )}
 
-      {/* Stats Cards */}
-      <NewPartStatsCards stats={stats} />
+      {/* Fill Dates Result Notification */}
+      {fillDatesResult && (
+        <div className={cn(
+          "flex items-center gap-2 mx-6 mb-4 p-3 rounded-lg border",
+          fillDatesResult.updated > 0 
+            ? "bg-[var(--accent-green)]/10 border-[var(--accent-green)]/30" 
+            : "bg-[var(--bg-tertiary)] border-[var(--border-subtle)]"
+        )}>
+          {fillDatesResult.updated > 0 ? (
+            <>
+              <Calendar className="h-4 w-4 text-[var(--accent-green)]" />
+              <span className="text-sm text-[var(--accent-green)]">
+                Updated {fillDatesResult.updated} part{fillDatesResult.updated !== 1 ? 's' : ''} with target dates from PACE gates
+              </span>
+            </>
+          ) : (
+            <>
+              <Calendar className="h-4 w-4 text-[var(--text-secondary)]" />
+              <span className="text-sm text-[var(--text-secondary)]">
+                All parts already have target dates set
+              </span>
+            </>
+          )}
+          <button onClick={() => setFillDatesResult(null)} className="ml-auto">
+            <X className="h-4 w-4 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]" />
+          </button>
+        </div>
+      )}
 
-      {/* Pipeline Progress */}
-      <NewPartProgress stats={stats} />
+      {/* Two-Tab Layout */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'table' | 'timeline')} className="flex-1 flex flex-col min-h-0">
+        <div className="px-6">
+          <TabsList className="w-auto bg-[var(--bg-tertiary)]">
+            <TabsTrigger value="table" className="gap-2">
+              <Table className="h-4 w-4" />
+              Parts Table
+            </TabsTrigger>
+            <TabsTrigger value="timeline" className="gap-2">
+              <Calendar className="h-4 w-4" />
+              Timeline
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-      {/* Filters & View Controls */}
-      <Card className="border-[var(--border-subtle)] bg-[var(--bg-secondary)]/50 backdrop-blur-sm">
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-            {/* Search */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--text-tertiary)]" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search parts by code, description, or group..."
-                className="pl-9 bg-[var(--bg-tertiary)] border-[var(--border-subtle)]"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
+        {/* Table Tab */}
+        <TabsContent value="table" className="flex-1 m-0 flex flex-col min-h-0">
+          {newParts.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-8">
+              <div className="w-16 h-16 rounded-full bg-[var(--accent-blue)]/10 flex items-center justify-center mb-4">
+                <Table className="h-8 w-8 text-[var(--accent-blue)]" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">No new parts yet</h3>
+              <p className="text-[var(--text-secondary)] text-center max-w-md mb-6">
+                New parts appear here when you add items to the BOM with the "New Part" flag checked,
+                import from PPL, or create them manually.
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => setShowImportDialog(true)}
+                  variant="outline"
+                  className="border-[var(--border-subtle)]"
                 >
-                  <X className="h-4 w-4 text-[var(--text-tertiary)] hover:text-[var(--text-primary)]" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* Priority Filter */}
-              <Select
-                value={filterPriority || 'all'}
-                onValueChange={(value) => setFilterPriority(value === 'all' ? null : value)}
-              >
-                <SelectTrigger className="w-36 bg-[var(--bg-tertiary)] border-[var(--border-subtle)]">
-                  <Filter className="h-4 w-4 mr-2 text-[var(--text-tertiary)]" />
-                  <SelectValue placeholder="Priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Priorities</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="low">Low</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* View Mode Toggle */}
-              <div className="flex items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] p-1">
-                <button
-                  onClick={() => setViewMode('kanban')}
-                  className={cn(
-                    'flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                    viewMode === 'kanban'
-                      ? 'bg-[var(--accent-blue)] text-white'
-                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                  )}
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Import PPL
+                </Button>
+                <Button
+                  onClick={() => {
+                    setNewPartData({
+                      ...newPartData,
+                      placeholderCode: generatePlaceholderCode(),
+                    });
+                    setShowAddDialog(true);
+                  }}
+                  className="bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)]"
                 >
-                  <Kanban className="h-4 w-4" />
-                  Kanban
-                </button>
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={cn(
-                    'flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
-                    viewMode === 'table'
-                      ? 'bg-[var(--accent-blue)] text-white'
-                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                  )}
-                >
-                  <Table className="h-4 w-4" />
-                  Table
-                </button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add First Part
+                </Button>
               </div>
             </div>
-          </div>
-
-          {/* Active Filters */}
-          {(searchQuery || filterPriority) && (
-            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[var(--border-subtle)]">
-              <span className="text-xs text-[var(--text-tertiary)]">Active filters:</span>
-              {searchQuery && (
-                <Badge variant="secondary" className="text-xs">
-                  Search: "{searchQuery}"
-                  <button onClick={() => setSearchQuery('')} className="ml-1">
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              )}
-              {filterPriority && (
-                <Badge variant="secondary" className="text-xs">
-                  Priority: {filterPriority}
-                  <button onClick={() => setFilterPriority(null)} className="ml-1">
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              )}
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setFilterPriority(null);
-                }}
-                className="text-xs text-[var(--accent-blue)] hover:underline ml-auto"
-              >
-                Clear all
-              </button>
-            </div>
+          ) : (
+            <PartsTableTab
+              parts={newParts}
+              groups={groups}
+              onPartClick={setSelectedPart}
+              onUpdatePart={updatePartDetails}
+              onDeletePart={deletePart}
+              onMoveStatus={moveToStatus}
+              onBulkUpdate={handleBulkUpdate}
+              className="flex-1"
+            />
           )}
-        </CardContent>
-      </Card>
+        </TabsContent>
 
-      {/* Main Content */}
-      {newParts.length === 0 ? (
-        <Card className="border-[var(--border-subtle)] bg-[var(--bg-secondary)]/50 backdrop-blur-sm">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <div className="w-16 h-16 rounded-full bg-[var(--accent-blue)]/10 flex items-center justify-center mb-4">
-              <Sparkles className="h-8 w-8 text-[var(--accent-blue)]" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2">No new parts yet</h3>
-            <p className="text-[var(--text-secondary)] text-center max-w-md mb-6">
-              New parts appear here when you add items to the BOM with the "New Part" flag checked,
-              or you can create them manually.
-            </p>
-            <Button
-              onClick={() => {
-                setNewPartData({
-                  ...newPartData,
-                  placeholderCode: generatePlaceholderCode(),
-                });
-                setShowAddDialog(true);
-              }}
-              className="bg-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)]"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add First Part
-            </Button>
-          </CardContent>
-        </Card>
-      ) : viewMode === 'kanban' ? (
-        <NewPartKanban
-          partsByStatus={partsByStatus}
-          onPartClick={setSelectedPart}
-          onMoveStatus={moveToStatus}
-          isLoading={isLoading}
-        />
-      ) : (
-        <Card className="border-[var(--border-subtle)] bg-[var(--bg-secondary)]/50 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="text-lg">All New Parts</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-lg border border-[var(--border-subtle)] overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-[var(--bg-tertiary)]">
-                  <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                      Code
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                      Group
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                      Priority
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                      Final Code
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--border-subtle)]">
-                  {(searchQuery || filterPriority ? filteredParts : newParts).map((part) => (
-                    <tr
-                      key={part.id}
-                      onClick={() => setSelectedPart(part)}
-                      className="hover:bg-[var(--bg-tertiary)]/50 cursor-pointer transition-colors"
-                    >
-                      <td className="px-4 py-3 font-mono text-sm text-[var(--accent-blue)]">
-                        {part.placeholderCode}
-                      </td>
-                      <td className="px-4 py-3 text-sm line-clamp-1">{part.description}</td>
-                      <td className="px-4 py-3 text-sm text-[var(--text-secondary)]">
-                        {part.groupCode}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          className={cn(
-                            'text-xs',
-                            part.status === 'complete'
-                              ? 'bg-[var(--accent-green)]/10 text-[var(--accent-green)]'
-                              : part.status === 'procurement'
-                              ? 'bg-[var(--accent-orange)]/10 text-[var(--accent-orange)]'
-                              : 'bg-[var(--accent-blue)]/10 text-[var(--accent-blue)]'
-                          )}
-                        >
-                          {part.status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          className={cn(
-                            'text-xs',
-                            part.priority === 'critical'
-                              ? 'bg-[var(--accent-red)]/10 text-[var(--accent-red)]'
-                              : part.priority === 'high'
-                              ? 'bg-[var(--accent-orange)]/10 text-[var(--accent-orange)]'
-                              : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
-                          )}
-                        >
-                          {part.priority}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-sm text-[var(--accent-green)]">
-                        {part.finalItemCode || '-'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+        {/* Timeline Tab */}
+        <TabsContent value="timeline" className="flex-1 m-0 flex flex-col min-h-0">
+          <TimelineTab
+            parts={newParts}
+            project={project}
+            groups={groups}
+            onPartClick={setSelectedPart}
+            className="flex-1"
+          />
+        </TabsContent>
+      </Tabs>
+
+      {/* Summary Stats Bar */}
+      <SummaryStatsBar 
+        stats={stats} 
+        onFilterClick={handleStatsFilterClick}
+      />
 
       {/* Detail Drawer */}
       <NewPartDetailDrawer
@@ -597,7 +530,15 @@ export default function NewPartsPage() {
         onDelete={deletePart}
         onMoveStatus={moveToStatus}
       />
+
+      {/* PPL Import Dialog */}
+      <PplImportDialog
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        projectId={projectId}
+        createdBy={user?.email || 'Unknown'}
+        onImportComplete={refresh}
+      />
     </div>
   );
 }
-

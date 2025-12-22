@@ -42,7 +42,6 @@ export function ProjectSidebar() {
   const params = useParams();
   const projectId = params?.projectId as string;
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
 
   // Load sidebar state from localStorage
   useEffect(() => {
@@ -70,7 +69,7 @@ export function ProjectSidebar() {
     return pathname === fullHref || pathname.startsWith(fullHref + '/');
   };
 
-  const isExpanded = !isCollapsed || isHovered;
+  const isExpanded = !isCollapsed;
 
   return (
     <div
@@ -78,8 +77,6 @@ export function ProjectSidebar() {
         'group relative flex h-full flex-col glass border-r border-[var(--border-subtle)] transition-all duration-300 ease-in-out',
         isCollapsed ? 'w-16' : 'w-64'
       )}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Toggle Button */}
       <button
@@ -115,7 +112,7 @@ export function ProjectSidebar() {
             'flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors',
             isExpanded ? 'justify-start' : 'justify-center'
           )}
-          title={isCollapsed ? 'Back to Projects' : undefined}
+          title={!isExpanded ? 'Back to Projects' : undefined}
         >
           <ArrowLeft className="h-4 w-4 flex-shrink-0" />
           {isExpanded && <span className="whitespace-nowrap sidebar-text-fade-in">Back to Projects</span>}
@@ -140,7 +137,7 @@ export function ProjectSidebar() {
                 ? 'bg-gradient-to-r from-[var(--accent-blue)]/20 to-[var(--accent-blue-light)]/20 text-[var(--text-primary)] border-l-2 border-[var(--accent-blue)]'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
             )}
-            title={isCollapsed ? item.name : undefined}
+            title={!isExpanded ? item.name : undefined}
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />
             {isExpanded && <span className="whitespace-nowrap sidebar-text-fade-in">{item.name}</span>}
@@ -163,7 +160,7 @@ export function ProjectSidebar() {
                 ? 'bg-gradient-to-r from-[var(--accent-blue)]/20 to-[var(--accent-blue-light)]/20 text-[var(--text-primary)] border-l-2 border-[var(--accent-blue)]'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
             )}
-            title={isCollapsed ? item.name : undefined}
+            title={!isExpanded ? item.name : undefined}
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />
             {isExpanded && <span className="whitespace-nowrap sidebar-text-fade-in">{item.name}</span>}
@@ -186,7 +183,7 @@ export function ProjectSidebar() {
                 ? 'bg-gradient-to-r from-[var(--accent-blue)]/20 to-[var(--accent-blue-light)]/20 text-[var(--text-primary)] border-l-2 border-[var(--accent-blue)]'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
             )}
-            title={isCollapsed ? item.name : undefined}
+            title={!isExpanded ? item.name : undefined}
           >
             <item.icon className="h-5 w-5 flex-shrink-0" />
             {isExpanded && <span className="whitespace-nowrap sidebar-text-fade-in">{item.name}</span>}

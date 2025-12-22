@@ -1,6 +1,54 @@
 {
   "indexes": [
     {
+      "collectionGroup": "newParts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "newParts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "groupCode", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "newParts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "priority", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "newParts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "vendorCode", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "newParts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sprintPoLate", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "newParts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "productionPoLate", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "bomItems",
       "queryScope": "COLLECTION",
       "fields": [

@@ -31,7 +31,6 @@ const SIDEBAR_STORAGE_KEY = 'bom-wizard-sidebar-collapsed';
 export function GlobalSidebar() {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
 
   // Load sidebar state from localStorage
   useEffect(() => {
@@ -50,7 +49,7 @@ export function GlobalSidebar() {
     setIsCollapsed(!isCollapsed);
   };
 
-  const isExpanded = !isCollapsed || isHovered;
+  const isExpanded = !isCollapsed;
 
   return (
     <div
@@ -58,8 +57,6 @@ export function GlobalSidebar() {
         'group relative flex h-full flex-col glass border-r border-[var(--border-subtle)] transition-all duration-300 ease-in-out',
         isCollapsed ? 'w-16' : 'w-64'
       )}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Toggle Button */}
       <button
@@ -101,7 +98,7 @@ export function GlobalSidebar() {
                     ? 'bg-gradient-to-r from-[var(--accent-blue)]/20 to-[var(--accent-blue-light)]/20 text-[var(--text-primary)] border-l-2 border-[var(--accent-blue)]'
                     : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
                 )}
-                title={isCollapsed ? item.name : undefined}
+                title={!isExpanded ? item.name : undefined}
               >
                 <item.icon className="h-5 w-5 flex-shrink-0" />
                 {isExpanded && <span className="whitespace-nowrap sidebar-text-fade-in">{item.name}</span>}
@@ -124,7 +121,7 @@ export function GlobalSidebar() {
                         ? 'bg-gradient-to-r from-[var(--accent-blue)]/20 to-[var(--accent-blue-light)]/20 text-[var(--text-primary)] border-l-2 border-[var(--accent-blue)]'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
                     )}
-                    title={isCollapsed ? subItem.name : undefined}
+                    title={!isExpanded ? subItem.name : undefined}
                   >
                     <subItem.icon className="h-5 w-5 flex-shrink-0" />
                     {isExpanded && <span className="whitespace-nowrap sidebar-text-fade-in">{subItem.name}</span>}

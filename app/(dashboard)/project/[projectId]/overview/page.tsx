@@ -40,6 +40,7 @@ import {
   calculateProjectMetrics,
   fetchBomItemsForMetrics,
 } from '@/lib/bom/projectMetricsService';
+import { syncTargetDatesFromGates } from '@/lib/bom/newPartService';
 import { deleteDocument } from '@/lib/firebase/firestore';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
@@ -107,7 +108,7 @@ export default function ProjectOverviewPage() {
 
   // Handle gate update
   const handleGateUpdate = async (gateKey: GateKey, updates: Partial<ProjectGate>) => {
-    if (!gates) return;
+    if (!gates || !project) return;
 
     try {
       // Optimistic update
@@ -125,6 +126,24 @@ export default function ProjectOverviewPage() {
         const items = await fetchBomItemsForMetrics(projectId);
         const newMetrics = calculateProjectMetrics(items, updatedGates);
         setMetrics(newMetrics);
+      }
+
+      // Auto-sync new part target dates when sprint or mass production dates change
+      // Sprint MRD = 2 weeks before Sprint gate
+      // Production MRD = 2 weeks before Mass Production gate
+      if ((gateKey === 'sprint' || gateKey === 'massProduction') && updates.date) {
+        const updatedProject = { ...project, gates: updatedGates };
+        const syncResult = await syncTargetDatesFromGates(
+          projectId, 
+          updatedProject, 
+          gateKey
+        );
+        if (syncResult.updated > 0) {
+          toast.success(`${GATE_METADATA.find(m => m.key === gateKey)?.name} updated`, {
+            description: `Also updated ${syncResult.updated} part target date${syncResult.updated !== 1 ? 's' : ''} (MRD = gate date - 2 weeks)`,
+          });
+          return; // Skip the generic toast below
+        }
       }
 
       toast.success(`${GATE_METADATA.find(m => m.key === gateKey)?.name} updated`);

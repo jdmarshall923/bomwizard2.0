@@ -2,8 +2,7 @@
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { NewPart } from '@/types/newPart';
-import { NewPartStatus } from '@/types/bom';
+import { NewPart, NewPartStatus, ColumnConfig } from '@/types/newPart';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -74,6 +73,7 @@ interface NewPartsTableProps {
   onDeletePart: (partId: string) => void;
   onMoveStatus: (partId: string, newStatus: NewPartStatus) => void;
   groupBy: GroupByOption;
+  columns: ColumnConfig[];
   className?: string;
 }
 
@@ -88,10 +88,27 @@ export function NewPartsTable({
   onDeletePart,
   onMoveStatus,
   groupBy,
+  columns,
   className,
 }: NewPartsTableProps) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set()); // Track collapsed, not expanded
+
+  // Get visible columns
+  const visibleColumns = useMemo(() => columns.filter(c => c.isVisible), [columns]);
+  
+  // Check if a specific column is visible
+  const isColumnVisible = useCallback((columnId: string) => {
+    return visibleColumns.some(c => c.id === columnId);
+  }, [visibleColumns]);
+
+  // Sync horizontal scroll between header and body
+  const handleBodyScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    if (headerRef.current) {
+      headerRef.current.scrollLeft = e.currentTarget.scrollLeft;
+    }
+  }, []);
 
   // Get group key for a part
   const getGroupKey = useCallback((part: NewPart): string => {
@@ -187,24 +204,50 @@ export function NewPartsTable({
 
   return (
     <div className={cn('flex flex-col border border-[var(--border-subtle)] rounded-lg bg-[var(--bg-secondary)]/50 backdrop-blur-sm overflow-hidden', className)}>
-      {/* Fixed Header */}
-      <div className="flex items-center h-10 px-2 border-b border-[var(--border-subtle)] bg-[var(--bg-tertiary)]/50 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-        <div className="w-10 flex-shrink-0 flex items-center justify-center">
-          <Checkbox
-            checked={allSelected ? true : someSelected ? 'indeterminate' : false}
-            onCheckedChange={() => allSelected ? onClearSelection() : onSelectAll()}
-            className="h-4 w-4"
-          />
+      {/* Fixed Header - scrolls horizontally with body */}
+      <div 
+        ref={headerRef}
+        className="h-10 border-b border-[var(--border-subtle)] bg-[var(--bg-tertiary)]/50 overflow-x-auto overflow-y-hidden"
+        style={{ scrollbarWidth: 'none' }}
+      >
+        <div className="flex items-center h-full px-2 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider min-w-max">
+          <div className="w-10 flex-shrink-0 flex items-center justify-center">
+            <Checkbox
+              checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+              onCheckedChange={() => allSelected ? onClearSelection() : onSelectAll()}
+              className="h-4 w-4"
+            />
+          </div>
+          {isColumnVisible('placeholderCode') && <div className="w-24 flex-shrink-0 px-2">Code</div>}
+          {isColumnVisible('description') && <div className="w-[200px] flex-shrink-0 px-2">Description</div>}
+          {isColumnVisible('status') && <div className="w-28 flex-shrink-0 px-2">Status</div>}
+          {isColumnVisible('vendorName') && <div className="w-28 flex-shrink-0 px-2">Vendor</div>}
+          {isColumnVisible('baseLeadTimeDays') && <div className="w-20 flex-shrink-0 px-2 text-center">Lead</div>}
+          {isColumnVisible('freightType') && <div className="w-16 flex-shrink-0 px-2 text-center">Frt</div>}
+          {isColumnVisible('sprintStatus') && <div className="w-20 flex-shrink-0 px-2 text-center">Sprint</div>}
+          {isColumnVisible('productionStatus') && <div className="w-20 flex-shrink-0 px-2 text-center">Prod</div>}
+          {isColumnVisible('finalItemCode') && <div className="w-24 flex-shrink-0 px-2">Final Code</div>}
+          {/* Drawing columns */}
+          {isColumnVisible('drawingNumber') && <div className="w-24 flex-shrink-0 px-2">Drawing #</div>}
+          {isColumnVisible('drawingRevision') && <div className="w-16 flex-shrink-0 px-2">Rev</div>}
+          {isColumnVisible('drawingWorkflowState') && <div className="w-24 flex-shrink-0 px-2">Workflow</div>}
+          {/* Assignment columns */}
+          {isColumnVisible('projectCoordinator') && <div className="w-24 flex-shrink-0 px-2">Coordinator</div>}
+          {isColumnVisible('buyer') && <div className="w-24 flex-shrink-0 px-2">Buyer</div>}
+          {isColumnVisible('sqe') && <div className="w-24 flex-shrink-0 px-2">SQE</div>}
+          {/* Pricing columns */}
+          {isColumnVisible('quotedPrice') && <div className="w-20 flex-shrink-0 px-2 text-right">Price</div>}
+          {isColumnVisible('currency') && <div className="w-16 flex-shrink-0 px-2">Curr</div>}
+          {/* Sprint columns */}
+          {isColumnVisible('sprintQuantity') && <div className="w-20 flex-shrink-0 px-2 text-right">Sprint Qty</div>}
+          {isColumnVisible('sprintTargetDate') && <div className="w-24 flex-shrink-0 px-2">Sprint Date</div>}
+          {isColumnVisible('sprintPoNumber') && <div className="w-24 flex-shrink-0 px-2">Sprint PO</div>}
+          {/* Production columns */}
+          {isColumnVisible('massProductionQuantity') && <div className="w-20 flex-shrink-0 px-2 text-right">Prod Qty</div>}
+          {isColumnVisible('productionTargetDate') && <div className="w-24 flex-shrink-0 px-2">Prod Date</div>}
+          {isColumnVisible('productionPoNumber') && <div className="w-24 flex-shrink-0 px-2">Prod PO</div>}
+          <div className="w-10 flex-shrink-0" />
         </div>
-        <div className="w-24 flex-shrink-0 px-2">Code</div>
-        <div className="flex-1 min-w-[200px] px-2">Description</div>
-        <div className="w-28 flex-shrink-0 px-2">Status</div>
-        <div className="w-28 flex-shrink-0 px-2">Vendor</div>
-        <div className="w-20 flex-shrink-0 px-2 text-center">Lead</div>
-        <div className="w-16 flex-shrink-0 px-2 text-center">Frt</div>
-        <div className="w-16 flex-shrink-0 px-2 text-center">Scrap</div>
-        <div className="w-24 flex-shrink-0 px-2">Final Code</div>
-        <div className="w-10 flex-shrink-0" />
       </div>
 
       {/* Virtualized Body */}
@@ -212,11 +255,12 @@ export function NewPartsTable({
         ref={parentRef}
         className="flex-1 overflow-auto"
         style={{ height: 'calc(100% - 40px)' }}
+        onScroll={handleBodyScroll}
       >
         <div
           style={{
             height: `${virtualizer.getTotalSize()}px`,
-            width: '100%',
+            minWidth: 'max-content',
             position: 'relative',
           }}
         >
@@ -272,6 +316,7 @@ export function NewPartsTable({
                   onDelete={() => onDeletePart(part.id)}
                   onMoveStatus={(status) => onMoveStatus(part.id, status)}
                   isGrouped={groupBy !== 'none'}
+                  isColumnVisible={isColumnVisible}
                 />
               </div>
             );
@@ -311,7 +356,7 @@ function GroupHeader({
   return (
     <div
       onClick={onToggle}
-      className="flex items-center h-full px-2 bg-[var(--bg-tertiary)]/70 border-b border-[var(--border-subtle)] cursor-pointer hover:bg-[var(--bg-tertiary)] transition-colors"
+      className="flex items-center h-full px-2 bg-[var(--bg-tertiary)]/70 border-b border-[var(--border-subtle)] cursor-pointer hover:bg-[var(--bg-tertiary)] transition-colors min-w-max"
     >
       <div className="w-10 flex-shrink-0 flex items-center justify-center">
         {isExpanded ? (
@@ -331,6 +376,12 @@ function GroupHeader({
   );
 }
 
+// Helper to format dates
+const formatDate = (timestamp: { toDate: () => Date } | null | undefined) => {
+  if (!timestamp) return '—';
+  return timestamp.toDate().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+};
+
 // Part Row Component - memoized to prevent unnecessary re-renders
 const PartRowComponent = React.memo(function PartRowComponent({
   part,
@@ -342,6 +393,7 @@ const PartRowComponent = React.memo(function PartRowComponent({
   onDelete,
   onMoveStatus,
   isGrouped,
+  isColumnVisible,
 }: {
   part: NewPart;
   isSelected: boolean;
@@ -352,15 +404,14 @@ const PartRowComponent = React.memo(function PartRowComponent({
   onDelete: () => void;
   onMoveStatus: (status: NewPartStatus) => void;
   isGrouped: boolean;
+  isColumnVisible: (columnId: string) => boolean;
 }) {
   const statusConfig = STATUS_CONFIG[part.status] || STATUS_CONFIG.pending;
-  const freightDays = part.freightType === 'air' ? (part.airFreightDays || 5) : (part.seaFreightDays || 35);
-  const totalLead = (part.quotedLeadTimeDays || 0) + freightDays;
 
   return (
     <div
       className={cn(
-        'flex items-center h-full px-2 border-b border-[var(--border-subtle)] hover:bg-[var(--bg-tertiary)]/50 transition-colors group',
+        'flex items-center h-full px-2 border-b border-[var(--border-subtle)] hover:bg-[var(--bg-tertiary)]/50 transition-colors group min-w-max',
         isSelected && 'bg-[var(--accent-blue)]/5',
         isGrouped && 'pl-6'
       )}
@@ -376,104 +427,188 @@ const PartRowComponent = React.memo(function PartRowComponent({
       </div>
 
       {/* Code */}
-      <div
-        className="w-24 flex-shrink-0 px-2 font-mono text-sm text-[var(--accent-blue)] cursor-pointer hover:underline"
-        onClick={onClick}
-      >
-        {part.placeholderCode}
-      </div>
+      {isColumnVisible('placeholderCode') && (
+        <div
+          className="w-24 flex-shrink-0 px-2 font-mono text-sm text-[var(--accent-blue)] cursor-pointer hover:underline"
+          onClick={onClick}
+        >
+          {part.placeholderCode}
+        </div>
+      )}
 
       {/* Description */}
-      <div className="flex-1 min-w-[200px] px-2 text-sm truncate" title={part.description}>
-        {part.description}
-      </div>
+      {isColumnVisible('description') && (
+        <div className="w-[200px] flex-shrink-0 px-2 text-sm truncate" title={part.description}>
+          {part.description}
+        </div>
+      )}
 
       {/* Status */}
-      <div className="w-28 flex-shrink-0 px-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className={cn(
-              'px-2 py-0.5 rounded text-xs font-medium transition-colors',
-              statusConfig.bg,
-              statusConfig.color,
-              'hover:opacity-80'
-            )}>
-              {statusConfig.label}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent className="bg-[var(--bg-secondary)] border-[var(--border-subtle)]">
-            {Object.entries(STATUS_CONFIG).map(([key, config]) => (
-              key !== 'cancelled' && (
-                <DropdownMenuItem
-                  key={key}
-                  onClick={() => onMoveStatus(key as NewPartStatus)}
-                  className={cn('text-xs', part.status === key && 'bg-[var(--bg-tertiary)]')}
-                >
-                  {config.label}
-                </DropdownMenuItem>
-              )
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      {isColumnVisible('status') && (
+        <div className="w-28 flex-shrink-0 px-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={cn(
+                'px-2 py-0.5 rounded text-xs font-medium transition-colors',
+                statusConfig.bg,
+                statusConfig.color,
+                'hover:opacity-80'
+              )}>
+                {statusConfig.label}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-[var(--bg-secondary)] border-[var(--border-subtle)]">
+              {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+                key !== 'cancelled' && (
+                  <DropdownMenuItem
+                    key={key}
+                    onClick={() => onMoveStatus(key as NewPartStatus)}
+                    className={cn('text-xs', part.status === key && 'bg-[var(--bg-tertiary)]')}
+                  >
+                    {config.label}
+                  </DropdownMenuItem>
+                )
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
 
       {/* Vendor - Inline Edit */}
-      <div className="w-28 flex-shrink-0 px-2">
-        <InlineEditCell
-          value={part.vendorName || ''}
-          placeholder="Add..."
-          onSave={(value) => onUpdate({ vendorName: value })}
-          className="text-xs"
-        />
-      </div>
+      {isColumnVisible('vendorName') && (
+        <div className="w-28 flex-shrink-0 px-2">
+          <InlineEditCell
+            value={part.vendorName || ''}
+            placeholder="Add..."
+            onSave={(value) => onUpdate({ vendorName: value })}
+            className="text-xs"
+          />
+        </div>
+      )}
 
       {/* Lead Time - Inline Edit */}
-      <div className="w-20 flex-shrink-0 px-2 text-center">
-        <InlineEditCell
-          value={part.quotedLeadTimeDays?.toString() || ''}
-          placeholder="—"
-          onSave={(value) => onUpdate({ quotedLeadTimeDays: parseInt(value) || undefined })}
-          type="number"
-          suffix="d"
-          className="text-xs text-center w-12"
-        />
-      </div>
+      {isColumnVisible('baseLeadTimeDays') && (
+        <div className="w-20 flex-shrink-0 px-2 text-center">
+          <InlineEditCell
+            value={part.baseLeadTimeDays?.toString() || part.quotedLeadTimeDays?.toString() || ''}
+            placeholder="—"
+            onSave={(value) => onUpdate({ baseLeadTimeDays: parseInt(value) || undefined })}
+            type="number"
+            suffix="d"
+            className="text-xs text-center w-12"
+          />
+        </div>
+      )}
 
       {/* Freight Toggle */}
-      <div className="w-16 flex-shrink-0 px-2 flex justify-center">
-        <button
-          onClick={() => onUpdate({ freightType: part.freightType === 'air' ? 'sea' : 'air' })}
-          className={cn(
-            'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors',
-            part.freightType === 'air'
-              ? 'bg-sky-400/20 text-sky-400'
-              : 'bg-teal-500/20 text-teal-500'
-          )}
-        >
-          {part.freightType === 'air' ? (
-            <><Plane className="h-3 w-3" /></>
-          ) : (
-            <><Ship className="h-3 w-3" /></>
-          )}
-        </button>
-      </div>
+      {isColumnVisible('freightType') && (
+        <div className="w-16 flex-shrink-0 px-2 flex justify-center">
+          <button
+            onClick={() => onUpdate({ freightType: part.freightType === 'air' ? 'sea' : 'air' })}
+            className={cn(
+              'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs transition-colors',
+              part.freightType === 'air'
+                ? 'bg-sky-400/20 text-sky-400'
+                : 'bg-teal-500/20 text-teal-500'
+            )}
+          >
+            {part.freightType === 'air' ? (
+              <Plane className="h-3 w-3" />
+            ) : (
+              <Ship className="h-3 w-3" />
+            )}
+          </button>
+        </div>
+      )}
 
-      {/* Scrap Rate */}
-      <div className="w-16 flex-shrink-0 px-2 text-center">
-        <InlineEditCell
-          value={part.scrapRate?.toString() || '5'}
-          placeholder="5"
-          onSave={(value) => onUpdate({ scrapRate: parseFloat(value) || 5 })}
-          type="number"
-          suffix="%"
-          className="text-xs text-center w-10"
-        />
-      </div>
+      {/* Sprint Status */}
+      {isColumnVisible('sprintStatus') && (
+        <div className="w-20 flex-shrink-0 px-2 text-center">
+          <span className={cn(
+            'text-xs',
+            part.sprintPoLate ? 'text-[var(--accent-red)]' :
+            part.sprintReceived ? 'text-[var(--accent-green)]' :
+            part.sprintPoNumber ? 'text-[var(--accent-green)]' : 'text-[var(--text-tertiary)]'
+          )}>
+            {part.sprintReceived ? 'Rcvd' : part.sprintPoLate ? 'Late' : part.sprintPoNumber ? 'Ord' : '—'}
+          </span>
+        </div>
+      )}
+
+      {/* Production Status */}
+      {isColumnVisible('productionStatus') && (
+        <div className="w-20 flex-shrink-0 px-2 text-center">
+          <span className={cn(
+            'text-xs',
+            part.productionPoLate ? 'text-[var(--accent-red)]' :
+            part.productionReceived ? 'text-[var(--accent-green)]' :
+            part.productionPoNumber ? 'text-[var(--accent-green)]' : 'text-[var(--text-tertiary)]'
+          )}>
+            {part.productionReceived ? 'Rcvd' : part.productionPoLate ? 'Late' : part.productionPoNumber ? 'Ord' : '—'}
+          </span>
+        </div>
+      )}
 
       {/* Final Code */}
-      <div className="w-24 flex-shrink-0 px-2 font-mono text-xs text-[var(--accent-green)]">
-        {part.finalItemCode || '-'}
-      </div>
+      {isColumnVisible('finalItemCode') && (
+        <div className="w-24 flex-shrink-0 px-2 font-mono text-xs text-[var(--accent-green)]">
+          {part.finalItemCode || '—'}
+        </div>
+      )}
+
+      {/* Drawing columns */}
+      {isColumnVisible('drawingNumber') && (
+        <div className="w-24 flex-shrink-0 px-2 text-xs font-mono">{part.drawingNumber || '—'}</div>
+      )}
+      {isColumnVisible('drawingRevision') && (
+        <div className="w-16 flex-shrink-0 px-2 text-xs">{part.drawingRevision || '—'}</div>
+      )}
+      {isColumnVisible('drawingWorkflowState') && (
+        <div className="w-24 flex-shrink-0 px-2 text-xs capitalize">{part.drawingWorkflowState?.replace('_', ' ') || '—'}</div>
+      )}
+
+      {/* Assignment columns */}
+      {isColumnVisible('projectCoordinator') && (
+        <div className="w-24 flex-shrink-0 px-2 text-xs truncate">{part.projectCoordinator || '—'}</div>
+      )}
+      {isColumnVisible('buyer') && (
+        <div className="w-24 flex-shrink-0 px-2 text-xs truncate">{part.buyer || '—'}</div>
+      )}
+      {isColumnVisible('sqe') && (
+        <div className="w-24 flex-shrink-0 px-2 text-xs truncate">{part.sqe || '—'}</div>
+      )}
+
+      {/* Pricing columns */}
+      {isColumnVisible('quotedPrice') && (
+        <div className="w-20 flex-shrink-0 px-2 text-xs text-right">
+          {part.quotedPrice ? `${part.currency || '£'}${part.quotedPrice.toFixed(2)}` : '—'}
+        </div>
+      )}
+      {isColumnVisible('currency') && (
+        <div className="w-16 flex-shrink-0 px-2 text-xs">{part.currency || 'GBP'}</div>
+      )}
+
+      {/* Sprint columns */}
+      {isColumnVisible('sprintQuantity') && (
+        <div className="w-20 flex-shrink-0 px-2 text-xs text-right">{part.sprintQuantity || '—'}</div>
+      )}
+      {isColumnVisible('sprintTargetDate') && (
+        <div className="w-24 flex-shrink-0 px-2 text-xs">{formatDate(part.sprintTargetDate)}</div>
+      )}
+      {isColumnVisible('sprintPoNumber') && (
+        <div className="w-24 flex-shrink-0 px-2 text-xs font-mono">{part.sprintPoNumber || '—'}</div>
+      )}
+
+      {/* Production columns */}
+      {isColumnVisible('massProductionQuantity') && (
+        <div className="w-20 flex-shrink-0 px-2 text-xs text-right">{part.massProductionQuantity || '—'}</div>
+      )}
+      {isColumnVisible('productionTargetDate') && (
+        <div className="w-24 flex-shrink-0 px-2 text-xs">{formatDate(part.productionTargetDate)}</div>
+      )}
+      {isColumnVisible('productionPoNumber') && (
+        <div className="w-24 flex-shrink-0 px-2 text-xs font-mono">{part.productionPoNumber || '—'}</div>
+      )}
 
       {/* Actions + Status Icon */}
       <div className="w-10 flex-shrink-0 flex items-center justify-center gap-1">

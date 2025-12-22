@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { NewPart, NewPartStats } from '@/types/newPart';
-import { NewPartStatus } from '@/types/bom';
+import { NewPart, NewPartStats, NewPartStatus } from '@/types/newPart';
+import { UNASSIGNED_GROUP_CODE } from '@/types/bom';
 import {
   subscribeToNewParts,
   updateNewPartStatus,
@@ -129,7 +129,8 @@ export function useNewParts({ projectId }: UseNewPartsOptions): UseNewPartsRetur
         (part) =>
           part.placeholderCode.toLowerCase().includes(query) ||
           part.description.toLowerCase().includes(query) ||
-          part.groupCode.toLowerCase().includes(query)
+          (part.groupCode || '').toLowerCase().includes(query) ||
+          (part.vendorName || '').toLowerCase().includes(query)
       );
     }
 
