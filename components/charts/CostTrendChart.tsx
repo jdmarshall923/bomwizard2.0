@@ -401,3 +401,4 @@ export function CostTrendChart({ data, isLoading = false }: CostTrendChartProps)
   );
 }
 
+

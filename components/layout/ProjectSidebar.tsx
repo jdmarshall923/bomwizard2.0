@@ -5,23 +5,21 @@ import Link from 'next/link';
 import { usePathname, useParams } from 'next/navigation';
 import {
   ArrowLeft,
-  BarChart3,
   FileText,
   TrendingUp,
   Clock,
   Download,
   Package,
   Building2,
-  FileCheck,
-  Factory,
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  Target,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const projectNavigation = [
-  { name: 'Dashboard', href: '/project/[projectId]', icon: BarChart3 },
+  { name: 'Overview', href: '/project/[projectId]/overview', icon: Target },
   { name: 'BOM Explorer', href: '/project/[projectId]/bom', icon: FileText },
   { name: 'Cost Analysis', href: '/project/[projectId]/costs', icon: TrendingUp },
   { name: 'Version History', href: '/project/[projectId]/versions', icon: Clock },
@@ -30,8 +28,6 @@ const projectNavigation = [
 
 const trackingNavigation = [
   { name: 'New Parts', href: '/project/[projectId]/new-parts', icon: Sparkles },
-  { name: 'Quote Log', href: '/project/[projectId]/quotes', icon: FileCheck },
-  { name: 'Manufacturing Log', href: '/project/[projectId]/manufacturing', icon: Factory },
 ];
 
 const masterDataNavigation = [

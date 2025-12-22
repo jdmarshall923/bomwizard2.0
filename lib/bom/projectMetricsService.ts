@@ -344,3 +344,4 @@ export function getNextGateDate(gates: ProjectGates): Date | null {
   return nextGate?.gate.date?.toDate?.() || null;
 }
 
+

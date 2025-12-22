@@ -1,10 +1,27 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { GatesTimeline } from '@/components/projects/GatesTimeline';
 import { GateCard } from '@/components/projects/GateCard';
 import { MetricsDashboard } from '@/components/projects/MetricsDashboard';
@@ -15,19 +32,18 @@ import {
   ProjectMetrics, 
   GateKey, 
   GATE_METADATA,
-  createDefaultGates 
 } from '@/types';
 import {
-  getProjectGates,
   updateProjectGate,
   refreshProjectMetrics,
   initializeProjectGates,
   calculateProjectMetrics,
   fetchBomItemsForMetrics,
 } from '@/lib/bom/projectMetricsService';
+import { deleteDocument } from '@/lib/firebase/firestore';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
-import { RefreshCw, Target, LayoutGrid, List } from 'lucide-react';
+import { RefreshCw, Target, LayoutGrid, List, MoreVertical, Trash2, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -35,6 +51,7 @@ type ViewMode = 'timeline' | 'grid';
 
 export default function ProjectOverviewPage() {
   const params = useParams();
+  const router = useRouter();
   const projectId = params?.projectId as string;
 
   const [project, setProject] = useState<Project | null>(null);
@@ -44,6 +61,8 @@ export default function ProjectOverviewPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedGate, setSelectedGate] = useState<GateKey | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('timeline');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Fetch project data
   const fetchData = useCallback(async () => {
@@ -140,6 +159,27 @@ export default function ProjectOverviewPage() {
     setViewMode('grid'); // Switch to grid view to show details
   };
 
+  // Handle project deletion
+  const handleDeleteConfirm = async () => {
+    if (!project) return;
+
+    setDeleting(true);
+    try {
+      await deleteDocument('projects', project.id);
+      toast.success('Project deleted', {
+        description: `"${project.name}" has been permanently deleted.`,
+      });
+      router.push('/projects');
+    } catch (error: unknown) {
+      console.error('Error deleting project:', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast.error('Failed to delete project', {
+        description: message,
+      });
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-8">
@@ -170,9 +210,23 @@ export default function ProjectOverviewPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="space-y-2">
-          <h1 className="text-4xl font-bold tracking-tight">Project Overview</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-4xl font-bold tracking-tight">{project.name}</h1>
+            <span
+              className={cn(
+                'px-3 py-1 rounded-full text-xs font-medium',
+                project.status === 'active'
+                  ? 'bg-[var(--accent-green)]/20 text-[var(--accent-green)] border border-[var(--accent-green)]/30'
+                  : project.status === 'archived'
+                  ? 'bg-[var(--text-tertiary)]/20 text-[var(--text-tertiary)] border border-[var(--text-tertiary)]/30'
+                  : 'bg-[var(--accent-orange)]/20 text-[var(--accent-orange)] border border-[var(--accent-orange)]/30'
+              )}
+            >
+              {project.status}
+            </span>
+          </div>
           <p className="text-[var(--text-secondary)] text-lg">
-            PACE gates and project metrics for {project.name}
+            {project.code} • PACE gates and project metrics
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -186,6 +240,30 @@ export default function ProjectOverviewPage() {
             <RefreshCw className={cn('mr-2 h-4 w-4', refreshing && 'animate-spin')} />
             Refresh Metrics
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="border-[var(--border-subtle)]">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
+              <DropdownMenuItem 
+                onClick={() => router.push(`/project/${projectId}/settings`)}
+                className="cursor-pointer"
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-[var(--border-subtle)]" />
+              <DropdownMenuItem 
+                onClick={() => setDeleteDialogOpen(true)}
+                className="cursor-pointer text-[var(--accent-red)] focus:text-[var(--accent-red)]"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Project
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -281,7 +359,35 @@ export default function ProjectOverviewPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[var(--text-primary)]">Delete Project</AlertDialogTitle>
+            <AlertDialogDescription className="text-[var(--text-secondary)]">
+              Are you sure you want to delete &ldquo;{project?.name}&rdquo;? This action cannot be undone and will permanently delete the project and all associated data including BOM items, versions, quotes, and manufacturing logs.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              disabled={deleting}
+              className="border-[var(--border-subtle)] hover:bg-[var(--bg-tertiary)]"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={deleting}
+              className="bg-[var(--accent-red)] hover:bg-[var(--accent-red)]/90 text-white"
+            >
+              {deleting ? 'Deleting...' : 'Delete Project'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
 

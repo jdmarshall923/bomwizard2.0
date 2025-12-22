@@ -203,3 +203,4 @@ app/(dashboard)/project/[projectId]/new-parts/
 - Completion percentage
 - Average time in each stage
 
+

@@ -19,6 +19,9 @@ import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { deleteDocument } from '@/lib/firebase/firestore';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { GateProgressBar } from '@/components/projects/GatesTimeline';
+import { RiskDot } from '@/components/projects/RiskIndicator';
+import { MetricsSummary } from '@/components/projects/MetricsDashboard';
 
 export default function ProjectsPage() {
   const { projects, loading } = useProjects();
@@ -131,6 +134,30 @@ export default function ProjectsPage() {
                   <p className="text-sm text-[var(--text-secondary)] line-clamp-2">
                     {project.description}
                   </p>
+                )}
+                
+                {/* Gate Progress and Metrics */}
+                {project.gates && (
+                  <div className="space-y-2 py-2 border-t border-[var(--border-subtle)]">
+                    <GateProgressBar gates={project.gates} />
+                    {project.metrics && (
+                      <div className="flex items-center gap-3 text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <RiskDot riskLevel={project.metrics.riskLevel} />
+                          <span className="text-[var(--text-tertiary)] capitalize">{project.metrics.riskLevel}</span>
+                        </div>
+                        <span className="text-[var(--text-tertiary)]">|</span>
+                        <span className={cn(
+                          'font-medium',
+                          project.metrics.bomConfidence >= 80 ? 'text-[var(--accent-green)]' :
+                          project.metrics.bomConfidence >= 50 ? 'text-[var(--accent-orange)]' :
+                          'text-[var(--accent-red)]'
+                        )}>
+                          {Math.round(project.metrics.bomConfidence)}% confidence
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 )}
                 
                 <div className="flex items-center justify-between pt-2 border-t border-[var(--border-subtle)]">

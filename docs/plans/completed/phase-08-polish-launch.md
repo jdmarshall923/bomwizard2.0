@@ -214,3 +214,4 @@ components/
 - [x] Security rules protect all collections
 - [x] Toast notifications for all operations
 
+

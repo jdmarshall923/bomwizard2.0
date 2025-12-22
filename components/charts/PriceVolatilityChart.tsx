@@ -288,3 +288,4 @@ export function PriceVolatilityChart({ data, isLoading = false }: PriceVolatilit
   );
 }
 
+

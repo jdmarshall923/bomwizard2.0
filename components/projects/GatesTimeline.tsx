@@ -229,3 +229,4 @@ export function GateProgressBar({ gates }: { gates: ProjectGates }) {
   );
 }
 
+

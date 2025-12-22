@@ -1,6 +1,6 @@
 # BOM Wizard - Project Plans
 
-> **Last Updated**: December 20, 2024  
+> **Last Updated**: December 21, 2024  
 > **Current Phase**: Phase 9 - Project Management (PACE Gates)
 
 ---
@@ -18,8 +18,11 @@
 | 6 | Cost Analysis | ✅ Complete | Dec 2024 | Dec 2024 |
 | 7 | New Part Tracker | ✅ Complete | Dec 2024 | Dec 2024 |
 | 8 | Polish & Launch | ✅ Complete | Dec 2024 | Dec 2024 |
+| 9.5 | Merge Parts Timeline | ✅ Complete | Dec 2024 | Dec 2024 |
+| 10.1 | New Parts & BOM Integration | ✅ Complete | Dec 2024 | Dec 2024 |
 | **9** | **Project Management** | 📋 **NEXT** | - | - |
 | 10 | Parts Order Timeline | 📋 Planned | - | - |
+| 10.2 | New Parts Page Redesign | 📋 Planned | - | - |
 | 11 | Final Polish & Deploy | 📋 Planned | - | - |
 | 12 | AI Integration | 📋 Future | - | - |
 
@@ -39,12 +42,15 @@
 | [phase-06-cost-analysis.md](./completed/phase-06-cost-analysis.md) | Charts, metrics, Pareto analysis |
 | [phase-07-new-part-tracker.md](./completed/phase-07-new-part-tracker.md) | Kanban board, part lifecycle |
 | [phase-08-polish-launch.md](./completed/phase-08-polish-launch.md) | Error handling, loading states, security |
+| [phase-9.5-merge-timeline.md](./completed/phase-9.5-merge-timeline.md) | Merged Parts Timeline into New Parts page |
+| [phase-10.1-new-parts-bom-integration.md](./completed/phase-10.1-new-parts-bom-integration.md) | BOM ↔ New Parts sync, order data on parts |
 
 ### Upcoming Phases
 | File | Description |
 |------|-------------|
-| [phase-09-project-management.md](./upcoming/phase-09-project-management.md) | PACE gates, metrics dashboard |
-| [phase-10-parts-timeline.md](./upcoming/phase-10-parts-timeline.md) | Gantt chart, order tracking |
+| [phase-09-project-management.md](./upcoming/phase-09-project-management.md) | PACE gates, metrics dashboard, project overview |
+| [phase-10-parts-timeline.md](./upcoming/phase-10-parts-timeline.md) | Gantt chart, order tracking, freight toggle |
+| [phase-10.2-new-parts-redesign.md](./upcoming/phase-10.2-new-parts-redesign.md) | Split view: table + timeline, cleaner UI |
 | [phase-11-final-polish.md](./upcoming/phase-11-final-polish.md) | Final testing, deployment |
 | [phase-12-ai-integration.md](./upcoming/phase-12-ai-integration.md) | Gemini AI assistant |
 
@@ -54,7 +60,11 @@
 
 | Date | Update | Phase |
 |------|--------|-------|
+| Dec 21, 2024 | Added Project Overview page with PACE gates | 9 |
+| Dec 21, 2024 | Cleaned up Gantt chart for rebuild | 10 |
 | Dec 20, 2024 | Organized all plans into docs/plans folder | - |
+| Dec 20, 2024 | Completed Phase 10.1 - New Parts & BOM Integration | 10.1 |
+| Dec 20, 2024 | Completed Phase 9.5 - Merge Parts Timeline | 9.5 |
 | Dec 20, 2024 | Completed Phase 8 - Polish & Launch | 8 |
 | Dec 20, 2024 | Completed Phase 7 - New Part Tracker | 7 |
 | Dec 2024 | Phases 1-6 completed | 1-6 |
@@ -64,8 +74,8 @@
 ## 🎯 Quick Links
 
 - **Start Next Phase**: [Phase 9 - Project Management](./upcoming/phase-09-project-management.md)
-- **Implementation Status**: [/IMPLEMENTATION_STATUS.md](/IMPLEMENTATION_STATUS.md)
-- **Full Project Plan**: [/FULL_PROJECT_PLAN.md](/FULL_PROJECT_PLAN.md)
+- **Gantt Chart Plan**: [Phase 10 - Parts Order Timeline](./upcoming/phase-10-parts-timeline.md)
+- **UI Redesign Plan**: [Phase 10.2 - New Parts Page Redesign](./upcoming/phase-10.2-new-parts-redesign.md)
 
 ---
 
@@ -91,3 +101,29 @@ BOM Wizard is a Bill of Materials management system that helps manufacturers:
 - **Manage** projects with PACE gates and timelines (Phase 9-10)
 - **AI-Assist** users with intelligent suggestions (Phase 12)
 
+---
+
+## 📂 Current File Structure
+
+```
+docs/plans/
+├── README.md                          # This file
+├── completed/
+│   ├── phase-01-foundation.md
+│   ├── phase-02-import-system.md
+│   ├── phase-03-bom-explorer.md
+│   ├── phase-03.7-batch-entry.md
+│   ├── phase-04-bom-control-panel.md
+│   ├── phase-05-version-control.md
+│   ├── phase-06-cost-analysis.md
+│   ├── phase-07-new-part-tracker.md
+│   ├── phase-08-polish-launch.md
+│   ├── phase-9.5-merge-timeline.md
+│   └── phase-10.1-new-parts-bom-integration.md
+└── upcoming/
+    ├── phase-09-project-management.md
+    ├── phase-10-parts-timeline.md
+    ├── phase-10.2-new-parts-redesign.md
+    ├── phase-11-final-polish.md
+    └── phase-12-ai-integration.md
+```

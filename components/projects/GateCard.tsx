@@ -209,3 +209,4 @@ export function GateCard({ gate, meta, onUpdate, isEditable = true }: GateCardPr
   );
 }
 
+

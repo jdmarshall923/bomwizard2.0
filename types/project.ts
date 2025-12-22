@@ -1,5 +1,78 @@
 import { Timestamp } from 'firebase/firestore';
 
+// ============================================
+// PACE Gates Types
+// ============================================
+
+export type GateStatus = 'not_started' | 'in_progress' | 'passed' | 'failed' | 'skipped';
+
+export type GateKey = 'briefed' | 'dti' | 'da' | 'dtx' | 'sprint' | 'dtl' | 'massProduction' | 'dtc';
+
+export interface ProjectGate {
+  date?: Timestamp;        // Target date for this gate
+  status: GateStatus;
+  completedAt?: Timestamp; // When gate was passed
+  notes?: string;
+}
+
+export interface ProjectGates {
+  briefed: ProjectGate;
+  dti: ProjectGate;
+  da: ProjectGate;
+  dtx: ProjectGate;
+  sprint: ProjectGate;
+  dtl: ProjectGate;
+  massProduction: ProjectGate;
+  dtc: ProjectGate;
+}
+
+export interface ProjectMetrics {
+  bomConfidence: number;          // 0-100 percentage
+  riskLevel: 'low' | 'medium' | 'high' | 'critical';
+  partsAtRisk: number;            // Parts that won't arrive in time
+  partsOnTrack: number;
+  sprintReadiness: number;        // 0-100 % ready for sprint
+  massProductionReadiness: number; // 0-100 % ready for mass prod
+}
+
+export interface GateMeta {
+  key: GateKey;
+  name: string;
+  fullName: string;
+  description: string;
+}
+
+export const GATE_METADATA: GateMeta[] = [
+  { key: 'briefed', name: 'Briefed', fullName: 'Project Briefed', description: 'Initial project brief approved' },
+  { key: 'dti', name: 'DTI', fullName: 'Decision to Initiate', description: 'Go/no-go for project start' },
+  { key: 'da', name: 'DA', fullName: 'Design Approval', description: 'Design pens down, drawings complete' },
+  { key: 'dtx', name: 'DTX', fullName: 'Decision to Execute', description: 'Approve for production preparation' },
+  { key: 'sprint', name: 'Sprint', fullName: 'Sprint MRD', description: 'Test/sprint production run date' },
+  { key: 'dtl', name: 'DTL', fullName: 'Decision to Launch', description: 'Final approval for mass production' },
+  { key: 'massProduction', name: 'Mass Prod', fullName: 'Mass Production', description: 'Full production start date' },
+  { key: 'dtc', name: 'DTC', fullName: 'Decision to Close', description: 'Project closure and handover' },
+];
+
+/**
+ * Create default gates with all statuses set to not_started
+ */
+export function createDefaultGates(): ProjectGates {
+  return {
+    briefed: { status: 'not_started' },
+    dti: { status: 'not_started' },
+    da: { status: 'not_started' },
+    dtx: { status: 'not_started' },
+    sprint: { status: 'not_started' },
+    dtl: { status: 'not_started' },
+    massProduction: { status: 'not_started' },
+    dtc: { status: 'not_started' },
+  };
+}
+
+// ============================================
+// Project Types
+// ============================================
+
 export interface Project {
   id: string;
   code: string; // e.g., "PROJ-2024-001"
@@ -30,6 +103,10 @@ export interface Project {
     gate?: string;
     [key: string]: any;
   };
+  
+  // PACE Gates (Phase 10.15)
+  gates?: ProjectGates;
+  metrics?: ProjectMetrics;
 }
 
 /**
