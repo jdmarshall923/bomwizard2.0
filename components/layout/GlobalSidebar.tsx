@@ -3,18 +3,25 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, FolderOpen, Package, Building2, PoundSterling, Settings, Plug, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Home, FolderOpen, Package, Building2, PoundSterling, Settings, Plug, ChevronLeft, ChevronRight, ClipboardCheck, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
   { name: 'Home', href: '/', icon: Home },
   { name: 'Projects', href: '/projects', icon: FolderOpen },
+  { name: 'Pending Specs', href: '/specs/pending', icon: ClipboardCheck },
   {
     name: 'Master Data',
     items: [
       { name: 'SLItems', href: '/data/sl-items', icon: Package },
       { name: 'SLVendors', href: '/data/sl-vendors', icon: Building2 },
       { name: 'VendorContractPrices', href: '/data/vendor-contract-prices', icon: PoundSterling },
+    ],
+  },
+  {
+    name: 'Admin',
+    items: [
+      { name: 'Spec Mappings', href: '/admin/spec-mappings', icon: Layers },
     ],
   },
   {

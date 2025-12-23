@@ -117,6 +117,26 @@ service cloud.firestore {
         allow read: if isAuthenticated() && isProjectMember(projectId);
         allow write: if isAuthenticated() && isProjectOwner(projectId);
       }
+      
+      // Specs - project members can read/write, only owner can delete
+      match /specs/{specId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow create, update: if isAuthenticated() && isProjectMember(projectId);
+        allow delete: if isAuthenticated() && isProjectOwner(projectId);
+        
+        // Spec Changes - version history
+        match /changes/{changeId} {
+          allow read: if isAuthenticated() && isProjectMember(projectId);
+          allow create: if isAuthenticated() && isProjectMember(projectId);
+          allow update, delete: if false; // Changes are immutable
+        }
+      }
+      
+      // Group Origins - track how groups got into the BOM
+      match /groupOrigins/{originId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow write: if isAuthenticated() && isProjectMember(projectId);
+      }
     }
     
     // ============================================
@@ -181,6 +201,19 @@ service cloud.firestore {
     match /manufacturingCosts/{costId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
+    }
+    
+    // ============================================
+    // Spec Mappings - Global Learning Database
+    // ============================================
+    
+    // Spec Group Mappings - learned associations between spec options and BOM groups
+    match /specMappings/{mappingId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      // Only admins can delete (future admin role implementation)
+      // For now, disallow deletion to preserve learning data
+      allow delete: if false;
     }
     
     // ============================================

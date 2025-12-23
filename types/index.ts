@@ -5,4 +5,5 @@ export * from './quote';
 export * from './vendor';
 export * from './import';
 export * from './newPart';
+export * from './spec';
 
