@@ -2,7 +2,7 @@
 
 **Status**: 📋 Planned  
 **Estimated Duration**: 3-4 weeks  
-**Dependencies**: Phase 10.5 (New Parts & BOM Integration - Completed)
+**Dependencies**: Phase 10.1 (New Parts & BOM Integration)
 
 ---
 
@@ -43,23 +43,42 @@ Instead of pre-mapping a million+ combinations, the system **learns from user se
 
 ## Learning System - Detailed Design
 
+### Core Principle: Automatic Data Labeling
+
+**Every group selection is automatically saved as a mapping.** There is no "Save mapping" checkbox - it just happens. This ensures:
+
+1. **Zero friction** - Users don't need to think about whether to save
+2. **Complete data capture** - Every decision contributes to the learning database
+3. **Continuous improvement** - Confidence scores improve automatically over time
+
+The learning happens discreetly in the background. Users focus on their work; the system learns from their actions.
+
 ### Where is the Learning Data Stored?
 
-The learning data is stored in a **global collection** (not per-project) so knowledge transfers across all projects:
+The learning data is stored in a **global collection** (not per-project) so knowledge transfers across all projects. **Critically, mappings are scoped by bike type** because the same spec option (e.g., "12 Speed") requires different groups for different bike types.
 
 ```
 Firestore Collections:
 ├── specMappings/                    ← GLOBAL learning database
-│   ├── {mappingId}                  ← One doc per unique option
+│   ├── {mappingId}                  ← One doc per unique bikeType + category + option
+│   │   ├── bikeType: "Mountain"     ← KEY: Which bike type this applies to
 │   │   ├── category: "SPEEDS"
 │   │   ├── optionValue: "12 Speed"
-│   │   ├── groupCodes: ["GDR-1001", "GDR-1002", ...]
+│   │   ├── groupCodes: ["GDR-MTB-1201", "GDR-MTB-1202", ...]  ← MTB-specific groups
 │   │   ├── contextMappings: [...]   ← Combination-specific overrides
 │   │   ├── usageCount: 47
 │   │   ├── confidence: 94
 │   │   └── confirmedBy: ["user1", "user2", ...]
 │   │
+│   ├── {mappingId}                  ← SAME option, DIFFERENT bike type
+│   │   ├── bikeType: "Road"
+│   │   ├── category: "SPEEDS"
+│   │   ├── optionValue: "12 Speed"
+│   │   ├── groupCodes: ["GDR-RD-1201", "GDR-RD-1202", ...]    ← Road-specific groups
+│   │   └── ...
+│   │
 │   └── {mappingId}
+│       ├── bikeType: "E-Bike"
 │       ├── category: "HANDLEBAR"
 │       ├── optionValue: "Straight Bar"
 │       └── ...
@@ -68,6 +87,14 @@ Firestore Collections:
 │   └── specs/{specId}               ← Project-specific spec record
 │       └── (includes applied mappings for audit trail)
 ```
+
+**Why Bike Type Matters:**
+
+| Spec Option | Mountain Bike Groups | Road Bike Groups | E-Bike Groups |
+|-------------|---------------------|------------------|---------------|
+| 12 Speed | GDR-MTB-12xx (Shimano XT) | GDR-RD-12xx (Ultegra) | GDR-EB-12xx (EP8 compatible) |
+| Hydraulic Brakes | GBR-MTB-HYD (4-piston) | GBR-RD-HYD (flat mount) | GBR-EB-HYD (high power) |
+| Straight Bar | GHB-MTB-STR (wide 780mm) | GHB-RD-STR (narrow 420mm) | GHB-EB-STR (with display mount) |
 
 ### How Learning Works - Step by Step
 
@@ -80,10 +107,14 @@ Firestore Collections:
 │     ┌──────────────────────────────────────────────────────────────────┐   │
 │     │ For each selected option in the spec:                            │   │
 │     │                                                                  │   │
-│     │ Query: specMappings WHERE category = "SPEEDS"                    │   │
+│     │ Query: specMappings WHERE bikeType = "Mountain"   ← FROM PROJECT │   │
+│     │                      AND category = "SPEEDS"                     │   │
 │     │                      AND optionValue = "12 Speed"                │   │
 │     │                                                                  │   │
 │     │ Result: { groupCodes: [...], confidence: 94%, usageCount: 47 }   │   │
+│     │                                                                  │   │
+│     │ If no match for this bike type, show "No mapping found"          │   │
+│     │ (don't fall back to other bike types - they're different!)       │   │
 │     └──────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  2. CONTEXT CHECK (for combination-specific mappings)                       │
@@ -123,9 +154,9 @@ Firestore Collections:
 │     │ • Flag as "needs different groups when combined with X"          │   │
 │     └──────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  5. SAVE & LEARN                                                            │
+│  5. SAVE & LEARN (AUTOMATIC)                                                │
 │     ┌──────────────────────────────────────────────────────────────────┐   │
-│     │ After user confirms:                                             │   │
+│     │ After user confirms (happens automatically, no checkbox):        │   │
 │     │                                                                  │   │
 │     │ IF user accepted suggestions unchanged:                          │   │
 │     │   → Increment usageCount                                         │   │
@@ -177,6 +208,7 @@ Some combinations need different groups than individual options would suggest:
 ```typescript
 interface SpecGroupMapping {
   // Base mapping (applies when this option selected alone or with "neutral" options)
+  bikeType: string;
   category: string;
   optionValue: string;
   groupCodes: string[];
@@ -215,39 +247,116 @@ Context Mapping:
     removeGroups: [GHB-GENERIC]       // Don't need generic one
 ```
 
-### Admin: Viewing & Managing Learned Mappings
-
-There should be an admin page to view/edit the learning database:
+### First-Time vs Repeat Usage
 
 ```
-/data/spec-mappings
-
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ SPEC GROUP MAPPINGS                                        [Export] [Import]│
+│ FIRST TIME (No existing mapping FOR THIS BIKE TYPE)                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Search: [                    ]  Filter: [All Categories ▼] [Confidence ▼] │
+│  Project: MY2025 Gravel Explorer                                            │
+│  Bike Type: Gravel                           ← Determines mapping context   │
 │                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Category   │ Option        │ Groups │ Confidence │ Uses │ Actions  │   │
-│  ├────────────┼───────────────┼────────┼────────────┼──────┼──────────┤   │
-│  │ SPEEDS     │ 12 Speed      │ 4      │ 94%        │ 47   │ [Edit]   │   │
-│  │ SPEEDS     │ 6 Speed       │ 3      │ 88%        │ 31   │ [Edit]   │   │
-│  │ HANDLEBAR  │ Straight Bar  │ 2      │ 76%        │ 23   │ [Edit]   │   │
-│  │ HANDLEBAR  │ High Bar      │ 2      │ 82%        │ 28   │ [Edit]   │   │
-│  │ LIGHTING   │ Dynamo SV8    │ 3      │ 45%        │ 5    │ [Edit]   │   │
-│  │ BRAKES     │ Forward       │ 2      │ 91%        │ 40   │ [Edit]   │   │
-│  │ BRAKES     │ Reverse       │ 2      │ 67%        │ 12   │ [Edit]   │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
+│  SPEEDS: 12 Speed                                                           │
+│  ┌────────────────────────────────────────────────────────────────────┐    │
+│  │ ⚠️ NO MAPPING FOR "GRAVEL" BIKES                                    │    │
+│  │                                                                    │    │
+│  │ ℹ️ Similar mappings exist for:                                      │    │
+│  │   • Mountain (94% confidence) - [View Groups]                      │    │
+│  │   • Road (88% confidence) - [View Groups]                          │    │
+│  │                                                                    │    │
+│  │ [Start from Mountain mapping]  [Start from scratch]                │    │
+│  │                                                                    │    │
+│  │ Search groups: [12 speed gravel drivetrain    ] [Search]          │    │
+│  │                                                                    │    │
+│  │ RESULTS:                                                           │    │
+│  │ ☐ GDR-GRV-1201  12 Speed Gravel Drivetrain - GRX                  │    │
+│  │ ☐ GDR-GRV-1202  12 Speed Cassette 10-51T                          │    │
+│  │ ☐ GDR-GRV-1203  12 Speed Chain 126L                               │    │
+│  │                                                                    │    │
+│  │ Select the groups needed for "12 Speed" on GRAVEL bikes            │    │
+│  └────────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
-│  LOW CONFIDENCE (Need attention)                                            │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ ⚠️ LIGHTING: Dynamo SV8 - 45% confidence, only 5 uses               │   │
-│  │ ⚠️ TUBES: Tubolito Presta - 38% confidence, groups changed twice    │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
+│  → User selects groups                                                      │
+│  → Creates NEW specMappings document with bikeType: "Gravel"               │
+│  → confidence starts at 20% (single use)                                    │
+│  → Next Gravel project using "12 Speed" will see this as suggestion        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ REPEAT USAGE (Existing mapping with 94% confidence FOR THIS BIKE TYPE)      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Project: MY2026 Trail Master                                               │
+│  Bike Type: Mountain                                                        │
+│                                                                             │
+│  SPEEDS: 12 Speed                                                           │
+│  ┌────────────────────────────────────────────────────────────────────┐    │
+│  │ SUGGESTED FOR MOUNTAIN BIKES (94% confidence)          [Confirm]  │    │
+│  │                                                                    │    │
+│  │ ☑ GDR-MTB-1201  12 Speed Drivetrain Assembly - Shimano XT         │    │
+│  │ ☑ GDR-MTB-1202  12 Speed Cassette 10-51T                          │    │
+│  │ ☑ GDR-MTB-1203  12 Speed Chain 126L                               │    │
+│  │ ☑ GDR-MTB-1204  12 Speed Derailleur XT                            │    │
+│  │                                                                    │    │
+│  │ Used 47 times for Mountain bikes • Last: 3 days ago               │    │
+│  │                                                                    │    │
+│  │ [+ Add more groups]  [This combo needs different groups]          │    │
+│  └────────────────────────────────────────────────────────────────────┘    │
+│                                                                             │
+│  → User clicks Confirm                                                      │
+│  → usageCount → 48                                                          │
+│  → confidence stays high                                                    │
+│  → Fast, minimal effort                                                     │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Admin: Viewing & Managing Learned Mappings
+
+Admin page to view/edit the learning database at `/admin/spec-mappings`:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ SPEC GROUP MAPPINGS                                              [Export] [Import]  │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                     │
+│  Bike Type: [All Types ▼]  Category: [All ▼]  Confidence: [All ▼]  Search: [    ]  │
+│                                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐   │
+│  │ Bike Type  │ Category   │ Option        │ Groups │ Conf. │ Uses │ Actions  │   │
+│  ├────────────┼────────────┼───────────────┼────────┼───────┼──────┼──────────┤   │
+│  │ Mountain   │ SPEEDS     │ 12 Speed      │ 4      │ 94%   │ 47   │ [Edit]   │   │
+│  │ Road       │ SPEEDS     │ 12 Speed      │ 4      │ 88%   │ 31   │ [Edit]   │   │
+│  │ E-Bike     │ SPEEDS     │ 12 Speed      │ 5      │ 72%   │ 18   │ [Edit]   │   │
+│  │ Mountain   │ SPEEDS     │ 6 Speed       │ 3      │ 85%   │ 28   │ [Edit]   │   │
+│  │ City       │ SPEEDS     │ 6 Speed       │ 3      │ 91%   │ 52   │ [Edit]   │   │
+│  │ Mountain   │ HANDLEBAR  │ Straight Bar  │ 2      │ 76%   │ 23   │ [Edit]   │   │
+│  │ Road       │ HANDLEBAR  │ Straight Bar  │ 2      │ 82%   │ 28   │ [Edit]   │   │
+│  │ E-Bike     │ LIGHTING   │ Dynamo SV8    │ 3      │ 45%   │ 5    │ [Edit]   │   │
+│  └─────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                     │
+│  ⚠️ LOW CONFIDENCE (Need attention)                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐   │
+│  │ E-Bike   │ LIGHTING: Dynamo SV8 - 45% confidence, only 5 uses              │   │
+│  │ Gravel   │ TUBES: Tubolito Presta - 38% confidence, groups changed twice   │   │
+│  └─────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                     │
+│  ℹ️ MISSING MAPPINGS (Options used but no mapping for this bike type)               │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐   │
+│  │ Gravel   │ SPEEDS: 12 Speed - No mapping (exists for Mountain, Road)       │   │
+│  │ City     │ HANDLEBAR: High Bar - No mapping                                │   │
+│  └─────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Admin can:**
+- Filter by bike type to see all mappings for that type
+- Identify gaps (option exists for one bike type but not another)
+- Copy mappings between bike types as a starting point
+- Merge similar mappings if groups are actually the same
 
 ---
 
@@ -282,7 +391,12 @@ interface Spec {
     productClass?: string;
     productLine?: string;
     productType?: string;
-    bikeType?: string;
+    
+    // CRITICAL: bikeType drives mapping lookups
+    // All spec-to-group mappings are scoped by this value
+    // Examples: "Mountain", "Road", "E-Bike", "Gravel", "City", "Hybrid"
+    bikeType: string;           // ← REQUIRED - used for learning system lookup
+    
     componentColour?: string;
     frameMaterial?: string;
   };
@@ -339,7 +453,6 @@ interface SpecOption {
   notes?: string;
   
   // Gear Ratio specific fields (only populated for GEAR RATIO category)
-  // These drive which part groups are selected in the BOM
   gearRatioDetails?: {
     chainring?: string;       // e.g., "54T" - determines chainring group
     chain?: string;           // e.g., "116L" - determines chain group  
@@ -375,23 +488,25 @@ interface ColourPart {
 interface SpecGroupMapping {
   id: string;
   
+  // CRITICAL: Bike type context - same option needs different groups per bike type
+  bikeType: string;            // "Mountain", "Road", "E-Bike", "Gravel", "City", etc.
+  
   // What spec option this mapping is for
   category: string;           // "SPEEDS", "HANDLEBAR", "GEAR RATIO", etc.
   optionValue: string;        // "12 Speed", "Straight Bar", "Standard"
   
-  // Which groups are needed
-  groupCodes: string[];       // ["GDR-1001-A01", "GDR-1002-A01"]
+  // Which groups are needed for THIS bike type
+  groupCodes: string[];       // ["GDR-MTB-1201", "GDR-MTB-1202"] for Mountain
+                              // vs ["GDR-RD-1201", "GDR-RD-1202"] for Road
   
   // Context rules - for combination-specific mappings
-  // e.g., "12 Speed + Straight Bar" needs different groups than "12 Speed + High Bar"
   contextRules?: ContextRule[];
   
   // Gear Ratio specific - map gear details to specific groups
-  // When category is "GEAR RATIO", these details drive group selection
   gearRatioMappings?: {
-    chainring?: { value: string; groupCode: string };   // "54T" -> "GCR-1054-A01"
-    chain?: { value: string; groupCode: string };       // "116L" -> "GCH-2116-A01"
-    sprockets?: { value: string; groupCode: string };   // "11-42T" -> "GSP-3042-A01"
+    chainring?: { value: string; groupCode: string };
+    chain?: { value: string; groupCode: string };
+    sprockets?: { value: string; groupCode: string };
   };
   
   // Learning metadata
@@ -406,7 +521,6 @@ interface SpecGroupMapping {
 }
 
 interface ContextRule {
-  // This mapping only applies when another option is also selected
   requiresCategory: string;   // e.g., "SPEEDS"
   requiresValue: string;      // e.g., "12 Speed"
 }
@@ -431,17 +545,319 @@ interface SpecChange {
 }
 
 interface FieldChange {
-  field: string;              // "selections.HANDLEBAR.selectedOption"
+  field: string;
   oldValue: unknown;
   newValue: unknown;
 }
 ```
 
+### Spec Comparison & BOM Impact Analysis
+
+```typescript
+// types/spec.ts
+
+interface SpecComparison {
+  specId: string;
+  fromVersion: number;
+  toVersion: number;
+  
+  // Header/Timeline changes
+  headerChanges: FieldChange[];
+  timelineChanges: FieldChange[];
+  
+  // Selection changes (the important ones)
+  selectionChanges: SelectionChange[];
+  
+  // Colour changes
+  colourChanges: ColourChange[];
+  
+  // BOM Impact Analysis
+  bomImpact: BomImpact;
+  
+  generatedAt: Timestamp;
+}
+
+interface SelectionChange {
+  category: string;
+  changeType: 'added' | 'removed' | 'modified' | 'quantity_changed';
+  
+  oldOption?: string;
+  newOption?: string;
+  
+  // For multi-select categories (like BRAKES)
+  addedOptions?: string[];
+  removedOptions?: string[];
+  
+  // Quantity changes
+  oldQty?: { min: number; max: number; split: number };
+  newQty?: { min: number; max: number; split: number };
+  
+  // BOM impact for THIS change
+  groupsToAdd: string[];
+  groupsToRemove: string[];
+}
+
+interface ColourChange {
+  optionNumber: number;
+  changeType: 'added' | 'removed' | 'modified';
+  
+  partChanges: {
+    partName: string;
+    field: string;
+    oldValue?: string;
+    newValue?: string;
+    isNowCustom: boolean;
+  }[];
+}
+
+interface BomImpact {
+  // Summary counts
+  groupsToAdd: number;
+  groupsToRemove: number;
+  partsAffected: number;
+  newPartsNeeded: number;
+  
+  // Detailed lists
+  addGroups: GroupImpact[];
+  removeGroups: GroupImpact[];
+  newPartsRequired: NewPartImpact[];
+  
+  // Risk assessment
+  hasUnmappedOptions: boolean;
+  unmappedOptions: { category: string; option: string }[];
+}
+
+interface GroupImpact {
+  groupCode: string;
+  groupName: string;
+  partCount: number;
+  reason: string;
+  confidence: 'high' | 'medium' | 'low' | 'unknown';
+}
+
+interface NewPartImpact {
+  reason: string;
+  category: string;
+  suggestedDescription: string;
+}
+```
+
+### BOM Group Origin Tracking
+
+```typescript
+// types/bom.ts - extend existing
+
+interface BomGroupOrigin {
+  groupCode: string;
+  projectId: string;
+  
+  // How this group got into the BOM
+  origin: 'spec_mapping' | 'manual_add' | 'import' | 'unknown';
+  
+  // If from spec mapping, which option
+  specCategory?: string;
+  specOption?: string;
+  
+  // When and who
+  addedAt: Timestamp;
+  addedBy: string;
+}
+```
+
+---
+
+## Spec Comparison - Detailed Design
+
+### Comparison Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ SPEC COMPARISON FLOW                                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. DETECT CHANGES                                                          │
+│     Compare v1 to v2, detect: added, removed, modified, quantity changes    │
+│                                                                             │
+│  2. CALCULATE BOM IMPACT                                                    │
+│     Look up OLD option mapping → get old groups                             │
+│     Look up NEW option mapping → get new groups                             │
+│     Groups to REMOVE = old groups - new groups                              │
+│     Groups to ADD = new groups - old groups                                 │
+│                                                                             │
+│  3. DISPLAY COMPARISON                                                      │
+│     Show side-by-side or unified diff view                                  │
+│     Highlight changes with colours                                          │
+│     Show BOM impact summary and details                                     │
+│                                                                             │
+│  4. ACTION OPTIONS                                                          │
+│     • Apply changes to BOM                                                  │
+│     • Review and adjust mappings                                            │
+│     • Create New Parts for custom items                                     │
+│     • Accept/Reject spec (if in review)                                     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Handling Unknown Mappings
+
+When the learning system doesn't have mappings, compare against **ACTUAL BOM**:
+
+```typescript
+interface SpecComparisonWithActualBom {
+  // Standard comparison fields...
+  
+  actualBomAnalysis: {
+    currentGroups: string[];           // Groups actually in Working BOM now
+    requiredGroups: string[];          // Groups needed for new spec
+    unmappedCategories: string[];      // Categories without mappings
+    
+    groupsToRemove: GroupWithReason[];
+    groupsToAdd: GroupWithReason[];
+    groupsToKeep: string[];
+    
+    hasUnmappedNewOptions: boolean;
+    requiresManualReview: boolean;
+  };
+}
+```
+
+---
+
+## Manual Group Management
+
+### Enhanced BOM Explorer with Spec Tags
+
+Enhance the existing Tree View with spec linking - add a "Spec Link" column:
+
+```
+│ Lvl │ Item         │ Description              │ Qty │ Mat £   │ ... │ Spec Link   │
+│─────│──────────────│──────────────────────────│─────│─────────│─────│─────────────│
+│  1  │ GMF-2030-A02 │ G Line, Andwander        │  1  │ £245.00 │     │ SPEEDS:12Sp │
+│  2  │ ├─ B103849   │ Crankset 12-Speed        │  1  │  £89.00 │     │             │
+│  2  │ ├─ B103850   │ Bottom Bracket           │  1  │  £34.00 │     │             │
+│     │              │                          │     │         │     │             │
+│  1  │ GHB-STR-01   │ Straight Bar Assembly    │  1  │  £56.00 │     │ HANDLEBAR   │
+│  2  │ ├─ B200100   │ Handlebar Straight       │  1  │  £32.00 │     │             │
+│     │              │                          │     │         │     │             │
+│  1  │ GRP-MISC-01  │ Miscellaneous Hardware   │  1  │  £23.00 │     │ ⚠️ Unlinked │
+```
+
+**Key points:**
+- Spec Link column only shows value on Level 1 rows (groups)
+- Part rows (Level 2+) leave column blank
+- Abbreviated format: "SPEEDS:12Sp" instead of full text
+- Hover/click shows full detail
+- "⚠️ Unlinked" for groups not tied to any spec category
+
+### Add Groups Dialog
+
+From BOM Explorer, click "+ Add Groups" to add from Template BOM:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ADD GROUPS TO WORKING BOM                                          [X]     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Search Template BOM: [                                    ] [Search]       │
+│  Filter by:  [All Categories ▼]  [Contains keyword... ]                    │
+│                                                                             │
+│  DRIVETRAIN                                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ ░░ GDR-0601  6 Speed Drivetrain      │ 12 parts │ Already in BOM   │   │
+│  │ ☑ GDR-1201  12 Speed Drivetrain     │ 15 parts │ £245              │   │
+│  │ ☑ GDR-1202  12 Speed Cassette       │  4 parts │  £89              │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  SELECTED: 4 groups (24 parts, £435 total)                                 │
+│                                                                             │
+│  Link to Spec Category: [SPEEDS ▼] Option: [12 Speed ▼]                    │
+│  (Mapping will be saved automatically for future projects)                 │
+│                                                                             │
+│  [Cancel]                                      [Add 4 Groups to BOM]        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Remove Groups Dialog
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ REMOVE GROUPS FROM WORKING BOM                                     [X]     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ⚠️ You are about to remove 3 groups containing 17 parts                    │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │ ▼ GDR-0601  6 Speed Drivetrain      │ 12 parts │ £198              │   │
+│  │   ├── B100001 │ Crankset 6-Speed    │ Qty: 1   │                   │   │
+│  │   └── ... 10 more parts                                            │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  IMPACT SUMMARY                                                             │
+│  Parts to be removed: 17                                                   │
+│  Cost reduction: £282                                                      │
+│  Spec link: SPEEDS → 6 Speed (will be unlinked)                           │
+│                                                                             │
+│  ☐ Also remove from New Parts Tracker                                      │
+│                                                                             │
+│  [Cancel]                              [Remove 3 Groups]                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Spec Change Workspace
+
+Side-by-side view for applying spec changes:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ APPLY SPEC CHANGES                                                         │
+│ SPEEDS: 6 Speed → 12 Speed                                        [Cancel] │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────┬───────────────────────────────────┐   │
+│  │ REMOVE FROM BOM                 │ ADD TO BOM                        │   │
+│  │ (Groups linked to 6 Speed)      │ (Groups for 12 Speed)             │   │
+│  ├─────────────────────────────────┼───────────────────────────────────┤   │
+│  │ ☑ GDR-0601  6 Speed Drivetrain │ ☑ GDR-1201  12 Speed Drivetrain  │   │
+│  │   12 parts │ £198              │   15 parts │ £245                │   │
+│  │ ☑ GDR-0602  6 Speed Cassette   │ ☑ GDR-1202  12 Speed Cassette    │   │
+│  │   3 parts │ £56                │   4 parts │ £89                  │   │
+│  │                                 │ ☑ GDR-1204  12 Speed Derailleur  │   │
+│  │                                 │   3 parts │ £67                  │   │
+│  ├─────────────────────────────────┼───────────────────────────────────┤   │
+│  │ TOTAL: 3 groups, 17 parts      │ TOTAL: 4 groups, 24 parts        │   │
+│  │ Cost: -£282                    │ Cost: +£435                       │   │
+│  └─────────────────────────────────┴───────────────────────────────────┘   │
+│                                                                             │
+│  NET IMPACT: Groups: +1  |  Parts: +7  |  Cost: +£153                      │
+│                                                                             │
+│  [Preview Full Parts List]            [Apply Changes]                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Link to Spec Dialog
+
+For groups in BOM that aren't linked to any spec category:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ LINK GROUPS TO SPEC CATEGORY                                       [X]     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Selected Groups:                                                           │
+│  • GRP-MISC-01  Miscellaneous Hardware (5 parts)                           │
+│  • GRP-TOOL-01  Tool Kit (8 parts)                                         │
+│                                                                             │
+│  Link to Spec Category:                                                     │
+│  ○ SPEEDS → 12 Speed                                                       │
+│  ○ HANDLEBAR → Straight Bar                                                │
+│  ● KITTING → Standard Kit                                                  │
+│  ○ (Don't link - keep as manual)                                           │
+│                                                                             │
+│  ℹ️ Mapping will be saved automatically for future projects                 │
+│                                                                             │
+│  [Cancel]                                      [Link to KITTING]            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
 ---
 
 ## Pages & Routes
-
-> **Note:** Following existing codebase patterns with `/project/[projectId]/` prefix
 
 | Route | Page | Description |
 |-------|------|-------------|
@@ -449,101 +865,14 @@ interface FieldChange {
 | `/project/[projectId]/spec/edit` | Spec Editor | Edit spec selections (Spec Builder UI) |
 | `/project/[projectId]/spec/import` | Spec Import | Upload Excel spec sheet |
 | `/project/[projectId]/spec/apply` | Apply to BOM | Map spec to groups with learning system |
+| `/project/[projectId]/spec/compare` | Spec Comparison | Compare versions, see BOM impact |
 | `/project/[projectId]/spec/history` | Spec History | View version history and changes |
 | `/specs/pending` | Pending Specs | Review queue for submitted specs (Coordinators) |
-| `/data/spec-mappings` | Spec Mappings Admin | View/edit the learning database |
-
----
-
-## UI Components
-
-### 1. Spec Overview Page (`/project/[projectId]/spec`)
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│ SPEC                                                                    │
-│ Project Name                                    [Edit] [Import] [History]│
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  STATUS BAR                                                             │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │ ✓ Accepted │ v2 │ Submitted: J.Smith, Dec 10 │ Accepted: Dec 15 │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                                                                         │
-│  ┌─────────────────────────────────┬───────────────────────────────┐   │
-│  │ PRODUCT INFO                    │ TIMELINE                      │   │
-│  │ ─────────────                   │ ────────                      │   │
-│  │ Family: Product Line            │ Sprint: Week 12               │   │
-│  │ Year: 2025                      │ Production: Week 20           │   │
-│  │ Category: Category A            │ Total Qty: 5,000              │   │
-│  │ Bike Type: Type X               │ Ordering: Wk 8 - Wk 10        │   │
-│  │ Frame Material: Aluminium       │ PBOM: PBOM-2025-001           │   │
-│  │                                 │ Countries Tab: ✓ Complete     │   │
-│  │                                 │ Colours Available: 3          │   │
-│  │                                 │ Business Case: [Link]         │   │
-│  └─────────────────────────────────┴───────────────────────────────┘   │
-│                                                                         │
-│  CONFIGURATION                        [Show All Options ▼] / [Selected] │
-│  ─────────────                                                          │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │ Category        │ Selected Options     │ Qty Split │ BOM Status │   │
-│  ├─────────────────┼──────────────────────┼───────────┼────────────┤   │
-│  │ HANDLEBAR       │ Straight Bar         │ 100%      │ ✓ 3 groups │   │
-│  │ SPEEDS          │ 12 Speed             │ 100%      │ ✓ 4 groups │   │
-│  │ GEAR RATIO      │ Standard             │ 100%      │ ✓ 2 groups │   │
-│  │                 │   → Chainring: 54T                            │   │
-│  │                 │   → Chain: 116L                               │   │
-│  │                 │   → Sprockets: 11-42T                         │   │
-│  │ LIGHTING        │ Dynamo SV8           │ 100%      │ ⚠ Unmapped │   │
-│  │ BRAKES          │ Forward Brakes       │ 60%       │ ✓ 2 groups │   │
-│  │                 │ Reverse Brakes       │ 40%       │ ✓ 2 groups │   │
-│  │ ...             │                      │           │            │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                                                                         │
-│  COLOUR OPTIONS                                                         │
-│  ─────────────                                                          │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │ Option 1: Blue Gloss                              🆕 Custom      │   │
-│  │   Main Frame, Front Frame, Rear Frame, Fork, Stem, Pin          │   │
-│  │   Finish: Gloss │ Qty: 2,500                                    │   │
-│  ├─────────────────────────────────────────────────────────────────┤   │
-│  │ Option 2: Black Matte                             ✓ Standard    │   │
-│  │   Main Frame, Front Frame                                        │   │
-│  │   Finish: Matte │ Qty: 2,500                                    │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                                                                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  [Apply Spec to BOM]        [View BOM]        [Export Spec]            │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### 2. Spec Editor / Builder (`/project/[projectId]/spec/edit`)
-
-Tabbed interface with sections: Product Info, Timeline, Configuration, Colours
-
-### 3. Apply Spec to BOM (`/project/[projectId]/spec/apply`)
-
-Wizard-style interface showing each category with:
-- Suggested groups (with confidence indicator)
-- Confirm/adjust selection
-- Search for additional groups
-- Flag for combination-specific mappings
-
-### 4. Pending Specs Review (`/specs/pending`)
-
-Queue-style page showing submitted specs awaiting review
-
-### 5. Spec History (`/project/[projectId]/spec/history`)
-
-Timeline view of spec versions with diff view capability
+| `/admin/spec-mappings` | Mapping Admin | View/edit the learning database |
 
 ---
 
 ## Services
-
-> **Note:** Following existing service patterns in `lib/bom/` and `lib/import/`
 
 ### lib/spec/specService.ts
 
@@ -551,119 +880,166 @@ Timeline view of spec versions with diff view capability
 // CRUD operations for Spec records
 createSpec(projectId: string, data: Partial<Spec>): Promise<Spec>
 getSpec(projectId: string): Promise<Spec | null>
-getSpecById(projectId: string, specId: string): Promise<Spec | null>
-updateSpec(projectId: string, specId: string, data: Partial<Spec>): Promise<void>
-deleteSpec(projectId: string, specId: string): Promise<void>
+updateSpec(specId: string, data: Partial<Spec>): Promise<void>
+deleteSpec(specId: string): Promise<void>
 
 // Workflow operations
-submitSpec(projectId: string, specId: string, userId: string): Promise<void>
-acceptSpec(projectId: string, specId: string, reviewerId: string): Promise<void>
-rejectSpec(projectId: string, specId: string, reviewerId: string, reason: string): Promise<void>
+submitSpec(specId: string): Promise<void>
+acceptSpec(specId: string, reviewerId: string): Promise<void>
+rejectSpec(specId: string, reviewerId: string, reason: string): Promise<void>
 
 // Version operations
-getSpecHistory(projectId: string, specId: string): Promise<SpecChange[]>
-revertToVersion(projectId: string, specId: string, version: number): Promise<void>
-
-// Pending specs for review queue
-getPendingSpecs(): Promise<Spec[]>
+getSpecHistory(specId: string): Promise<SpecChange[]>
+revertToVersion(specId: string, version: number): Promise<void>
 ```
 
 ### lib/spec/specImportService.ts
 
 ```typescript
-// Parse Excel spec sheet (similar pattern to pplImportService.ts)
+// Parse Excel spec sheet
 parseSpecSheet(file: File): Promise<ParsedSpec>
 validateParsedSpec(parsed: ParsedSpec): ValidationResult
 
 // Map parsed data to Spec record
-createSpecFromImport(projectId: string, parsed: ParsedSpec, userId: string): Promise<Spec>
+createSpecFromImport(projectId: string, parsed: ParsedSpec): Promise<Spec>
 ```
 
 ### lib/spec/specMappingService.ts
 
 ```typescript
-// Learning system for spec-to-group mappings
-getSuggestedGroups(category: string, option: string, context?: SpecSelection[]): Promise<SuggestedMapping>
-saveMapping(category: string, option: string, groups: string[], userId: string): Promise<void>
+// Learning system - ALL lookups scoped by bikeType
+getSuggestedGroups(
+  bikeType: string,
+  category: string, 
+  option: string, 
+  context?: SpecSelection[]
+): Promise<SuggestedMapping>
+
+saveMapping(
+  bikeType: string,
+  category: string, 
+  option: string, 
+  groups: string[]
+): Promise<void>
+
 confirmMapping(mappingId: string, userId: string): Promise<void>
-updateMapping(mappingId: string, groups: string[], userId: string): Promise<void>
 
 // Apply mappings to build BOM
 applySpecToBom(projectId: string, specId: string, mappings: AppliedMapping[]): Promise<BuildResult>
 
-// Search groups (uses existing templateBomService)
-searchGroups(projectId: string, query: string): Promise<BomGroup[]>
+// Search groups
+searchGroups(query: string, bikeType?: string): Promise<BomGroup[]>
+```
 
-// Admin functions
-getAllMappings(): Promise<SpecGroupMapping[]>
-getMappingsByCategory(category: string): Promise<SpecGroupMapping[]>
-getLowConfidenceMappings(threshold: number): Promise<SpecGroupMapping[]>
+### lib/spec/specComparisonService.ts
+
+```typescript
+// Compare two spec versions and calculate BOM impact
+compareSpecs(specId: string, fromVersion: number, toVersion: number): Promise<SpecComparison>
+
+// Compare imported spec to current
+compareImportedSpec(projectId: string, importedSpec: ParsedSpec): Promise<SpecComparison>
+
+// Apply changes from comparison to BOM
+applySpecChanges(projectId: string, comparison: SpecComparison, options: ApplyOptions): Promise<ApplyResult>
+
+// Generate comparison report
+generateComparisonReport(comparison: SpecComparison): Promise<Blob>
 ```
 
 ### lib/spec/specChangeService.ts
 
 ```typescript
 // Track changes between versions
-recordChange(projectId: string, specId: string, changeType: string, changes: FieldChange[], notes?: string): Promise<void>
-compareVersions(projectId: string, specId: string, versionA: number, versionB: number): Promise<FieldChange[]>
+recordChange(specId: string, changeType: string, changes: FieldChange[], notes?: string): Promise<void>
+compareVersions(specId: string, versionA: number, versionB: number): Promise<FieldChange[]>
+```
+
+### lib/bom/bomGroupService.ts
+
+```typescript
+// Get groups in Working BOM, organized by spec category
+getGroupsBySpecCategory(projectId: string): Promise<GroupsByCategory>
+
+// Add groups from Template to Working BOM (auto-saves mapping)
+addGroupsToBom(
+  projectId: string, 
+  groupCodes: string[], 
+  specLink?: { category: string; option: string }
+): Promise<AddResult>
+
+// Remove groups from Working BOM
+removeGroupsFromBom(
+  projectId: string, 
+  groupCodes: string[],
+  options?: { removeFromTracker: boolean }
+): Promise<RemoveResult>
+
+// Link existing groups to spec category (auto-saves mapping)
+linkGroupsToSpec(
+  projectId: string,
+  groupCodes: string[],
+  specCategory: string,
+  specOption: string
+): Promise<void>
+
+// Get available groups from Template BOM
+getAvailableGroups(
+  projectId: string,
+  filter?: { category?: string; search?: string }
+): Promise<TemplateGroup[]>
 ```
 
 ---
 
 ## Hooks
 
-> **Note:** Following existing hook patterns in `lib/hooks/`
-
-### lib/hooks/useSpec.ts
-
 ```typescript
-// Main spec data hook (follows useProjects pattern)
-export function useSpec(projectId: string) {
-  // Uses react-firebase-hooks/firestore
-  return {
-    spec: Spec | null;
-    loading: boolean;
-    error: Error | null;
-    refetch: () => void;
-  };
+// lib/hooks/useSpec.ts
+useSpec(projectId: string): {
+  spec: Spec | null;
+  loading: boolean;
+  error: Error | null;
+  updateSpec: (data: Partial<Spec>) => Promise<void>;
+  submitSpec: () => Promise<void>;
 }
-```
 
-### lib/hooks/useSpecMapping.ts
-
-```typescript
-export function useSpecMapping(category: string, option: string) {
-  return {
-    suggestions: SuggestedMapping | null;
-    confidence: number;
-    loading: boolean;
-    saveMapping: (groups: string[]) => Promise<void>;
-  };
+// lib/hooks/useSpecMapping.ts
+useSpecMapping(bikeType: string, category: string, option: string): {
+  suggestions: SuggestedMapping | null;
+  confidence: number;
+  loading: boolean;
+  saveMapping: (groups: string[]) => Promise<void>;
 }
-```
 
-### lib/hooks/usePendingSpecs.ts
-
-```typescript
-export function usePendingSpecs() {
-  return {
-    specs: Spec[];
-    loading: boolean;
-    acceptSpec: (specId: string) => Promise<void>;
-    rejectSpec: (specId: string, reason: string) => Promise<void>;
-  };
+// lib/hooks/useSpecComparison.ts
+useSpecComparison(specId: string, fromVersion: number, toVersion: number): {
+  comparison: SpecComparison | null;
+  loading: boolean;
+  applyChanges: (options: ApplyOptions) => Promise<ApplyResult>;
 }
-```
 
-### lib/hooks/useSpecHistory.ts
+// lib/hooks/usePendingSpecs.ts
+usePendingSpecs(): {
+  specs: Spec[];
+  loading: boolean;
+  acceptSpec: (specId: string) => Promise<void>;
+  rejectSpec: (specId: string, reason: string) => Promise<void>;
+}
 
-```typescript
-export function useSpecHistory(projectId: string, specId: string) {
-  return {
-    history: SpecChange[];
-    loading: boolean;
-    revertTo: (version: number) => Promise<void>;
-  };
+// lib/hooks/useSpecHistory.ts
+useSpecHistory(specId: string): {
+  history: SpecChange[];
+  loading: boolean;
+  revertTo: (version: number) => Promise<void>;
+}
+
+// lib/hooks/useSpecMappings.ts (for admin page)
+useSpecMappings(filters?: { bikeType?: string; category?: string }): {
+  mappings: SpecGroupMapping[];
+  loading: boolean;
+  lowConfidence: SpecGroupMapping[];
+  missingMappings: { bikeType: string; category: string; option: string }[];
 }
 ```
 
@@ -679,11 +1055,12 @@ app/(dashboard)/
 │       ├── edit/page.tsx            # Spec editor/builder
 │       ├── import/page.tsx          # Import Excel spec
 │       ├── apply/page.tsx           # Apply spec to BOM
+│       ├── compare/page.tsx         # Compare versions, BOM impact
 │       └── history/page.tsx         # Version history
 ├── specs/
-│   └── pending/page.tsx             # Pending reviews queue (global)
-└── data/
-    └── spec-mappings/page.tsx       # Admin: learning database
+│   └── pending/page.tsx             # Pending reviews queue
+└── admin/
+    └── spec-mappings/page.tsx       # Learning database admin
 
 components/spec/
 ├── SpecOverview.tsx                 # Main spec display
@@ -697,21 +1074,41 @@ components/spec/
 ├── SpecApplyWizard.tsx              # Apply to BOM wizard
 ├── SpecMappingCard.tsx              # Single category mapping UI
 ├── GroupSearchDialog.tsx            # Search and select groups
+├── SpecComparison.tsx               # Full comparison view
+├── SpecComparisonSummary.tsx        # Summary cards
+├── SelectionChangeCard.tsx          # Single selection change with BOM impact
+├── ColourChangeCard.tsx             # Colour change display
+├── BomImpactPanel.tsx               # Shows groups to add/remove
 ├── SpecHistoryTimeline.tsx          # Version history display
 ├── SpecChangeCard.tsx               # Single change entry
 ├── PendingSpecCard.tsx              # Card for review queue
 ├── SpecStatusBadge.tsx              # Status indicator
-└── ConfidenceIndicator.tsx          # Show mapping confidence %
+├── ConfidenceIndicator.tsx          # Show mapping confidence %
+└── MappingAdminTable.tsx            # Admin view of learned mappings
+
+components/bom/
+├── SpecLinkBadge.tsx                # Small badge showing spec category link
+├── GroupSelector.tsx                # Multi-select groups from template
+├── AddGroupsDialog.tsx              # Dialog to add groups
+├── RemoveGroupsDialog.tsx           # Confirmation with impact preview
+├── LinkToSpecDialog.tsx             # Link unlinked groups to spec
+├── SpecChangeWorkspace.tsx          # Side-by-side add/remove
+└── CategoryChangeCard.tsx           # Single category change in multi-change view
 
 lib/spec/
 ├── specService.ts                   # Spec CRUD & workflow
 ├── specImportService.ts             # Excel parsing
+├── specComparisonService.ts         # Compare specs, calculate BOM impact
 ├── specMappingService.ts            # Learning system
 └── specChangeService.ts             # Version tracking
+
+lib/bom/
+└── bomGroupService.ts               # Group-level BOM operations
 
 lib/hooks/
 ├── useSpec.ts
 ├── useSpecMapping.ts
+├── useSpecComparison.ts
 ├── usePendingSpecs.ts
 ├── useSpecMappings.ts               # For admin page
 └── useSpecHistory.ts
@@ -725,19 +1122,19 @@ types/
 ## Implementation Tasks
 
 ### Task 1: Data Models & Types (1 day)
-- [ ] Create `types/spec.ts` with all interfaces
-- [ ] Add export to `types/index.ts`
-- [ ] Set up Firestore collections: `specs` (under projects), `specMappings` (global), `specChanges` (under projects)
+- [ ] Create `types/spec.ts` with all interfaces (including bikeType)
+- [ ] Set up Firestore collections: `specs`, `specMappings`, `specChanges`
 - [ ] Create Firestore security rules for spec collections
+- [ ] Add BomGroupOrigin interface to track group origins
 
 ### Task 2: Core Services (2-3 days)
 - [ ] Implement `specService.ts` - CRUD and workflow
 - [ ] Implement `specChangeService.ts` - version tracking
-- [ ] Implement `specMappingService.ts` - learning system core with confidence scoring
+- [ ] Implement `specMappingService.ts` - learning system with bikeType scoping
 - [ ] Create hooks: `useSpec`, `useSpecHistory`
 
 ### Task 3: Spec Import (2 days)
-- [ ] Implement `specImportService.ts` - Excel parsing (use xlsx library, similar to PPL import)
+- [ ] Implement `specImportService.ts` - Excel parsing
 - [ ] Build `SpecImporter.tsx` component
 - [ ] Create `/project/[projectId]/spec/import` page
 - [ ] Handle the 19 categories + 5 colour slots parsing
@@ -762,37 +1159,56 @@ types/
 - [ ] Build `GroupSearchDialog.tsx` for manual selection
 - [ ] Build `ConfidenceIndicator.tsx`
 - [ ] Implement confidence scoring algorithm
-- [ ] Implement context-aware suggestions
+- [ ] Implement bikeType-scoped suggestions
+- [ ] Implement automatic mapping saves (no checkbox)
 - [ ] Create `/project/[projectId]/spec/apply` page
 - [ ] Connect to BOM building (transfer to Working BOM)
 
-### Task 7: Submission & Review Workflow (2 days)
+### Task 7: Spec Comparison & BOM Impact (2-3 days)
+- [ ] Implement `specComparisonService.ts`
+- [ ] Build `SpecComparison.tsx` main component
+- [ ] Build `SpecComparisonSummary.tsx`
+- [ ] Build `SelectionChangeCard.tsx` and `ColourChangeCard.tsx`
+- [ ] Build `BomImpactPanel.tsx`
+- [ ] Create `/project/[projectId]/spec/compare` page
+- [ ] Create `useSpecComparison` hook
+
+### Task 8: Manual Group Management (2 days)
+- [ ] Implement `bomGroupService.ts`
+- [ ] Enhance BomTree.tsx with Spec Link column
+- [ ] Build `SpecLinkBadge.tsx`
+- [ ] Build `AddGroupsDialog.tsx`
+- [ ] Build `RemoveGroupsDialog.tsx`
+- [ ] Build `LinkToSpecDialog.tsx`
+- [ ] Build `SpecChangeWorkspace.tsx`
+
+### Task 9: Submission & Review Workflow (2 days)
 - [ ] Build `PendingSpecCard.tsx`
 - [ ] Create `/specs/pending` page
-- [ ] Create `usePendingSpecs` hook
-- [ ] Implement accept/reject with notifications
-- [ ] Add role-based access (who can submit vs review)
+- [ ] Implement accept/reject with auto-comparison display
+- [ ] Add role-based access
 
-### Task 8: Version History (1-2 days)
+### Task 10: Version History (1-2 days)
 - [ ] Build `SpecHistoryTimeline.tsx`
 - [ ] Build `SpecChangeCard.tsx`
 - [ ] Create `/project/[projectId]/spec/history` page
 - [ ] Implement revert functionality
 
-### Task 9: Admin: Spec Mappings Page (1 day)
-- [ ] Create `/data/spec-mappings` page
-- [ ] Build table with filtering by category, confidence
-- [ ] Implement edit/delete mapping functionality
-- [ ] Show low-confidence mappings that need attention
+### Task 11: Admin - Spec Mappings Page (1 day)
+- [ ] Create `/admin/spec-mappings` page
+- [ ] Build `MappingAdminTable.tsx`
+- [ ] Implement bike type filtering
+- [ ] Show low-confidence and missing mappings
+- [ ] Add copy/merge mapping functionality
 
-### Task 10: Navigation & Integration (1 day)
-- [ ] Add Spec link to `ProjectSidebar.tsx` in projectNavigation array
-- [ ] Add Pending Specs link to `GlobalSidebar.tsx`
-- [ ] Add Spec Mappings to Master Data section in `GlobalSidebar.tsx`
+### Task 12: Navigation & Integration (1 day)
+- [ ] Add Spec link to ProjectSidebar
+- [ ] Add Pending Specs to GlobalSidebar
+- [ ] Add Spec Mappings to admin section
 - [ ] Connect spec timeline dates to PACE gates
 - [ ] Add "New Parts from Spec" integration
 
-### Task 11: Polish & Testing (2 days)
+### Task 13: Polish & Testing (2 days)
 - [ ] Loading states for all pages
 - [ ] Error handling throughout
 - [ ] Empty states (no spec yet, no pending reviews)
@@ -803,11 +1219,13 @@ types/
 
 ## Navigation Updates
 
-### ProjectSidebar.tsx Changes
+### ProjectSidebar.tsx
 
 Add to `projectNavigation` array:
 
 ```typescript
+import { ClipboardList } from 'lucide-react';
+
 const projectNavigation = [
   { name: 'Overview', href: '/project/[projectId]/overview', icon: Target },
   { name: 'Spec', href: '/project/[projectId]/spec', icon: ClipboardList }, // NEW
@@ -816,11 +1234,13 @@ const projectNavigation = [
 ];
 ```
 
-### GlobalSidebar.tsx Changes
+### GlobalSidebar.tsx
 
-Add Pending Specs link and Spec Mappings to Master Data:
+Add Pending Specs link:
 
 ```typescript
+import { ClipboardCheck, Layers } from 'lucide-react';
+
 const navigation = [
   { name: 'Home', href: '/', icon: Home },
   { name: 'Projects', href: '/projects', icon: FolderOpen },
@@ -828,23 +1248,23 @@ const navigation = [
   {
     name: 'Master Data',
     items: [
-      { name: 'SLItems', href: '/data/sl-items', icon: Package },
-      { name: 'SLVendors', href: '/data/sl-vendors', icon: Building2 },
-      { name: 'VendorContractPrices', href: '/data/vendor-contract-prices', icon: PoundSterling },
-      { name: 'Spec Mappings', href: '/data/spec-mappings', icon: Layers }, // NEW
+      // ... existing items
     ],
   },
-  // ...
+  {
+    name: 'Admin',
+    items: [
+      { name: 'Spec Mappings', href: '/admin/spec-mappings', icon: Layers }, // NEW
+    ],
+  },
 ];
 ```
 
 ---
 
-## Firestore Security Rules Additions
+## Firestore Security Rules
 
 ```javascript
-// firestore.rules - add these rules
-
 // Specs - project members can read, owners can write
 match /projects/{projectId}/specs/{specId} {
   allow read: if isProjectMember(projectId);
@@ -852,17 +1272,16 @@ match /projects/{projectId}/specs/{specId} {
   allow delete: if isProjectOwner(projectId);
 }
 
-// Spec Changes - project members can read, system writes on changes
+// Spec Changes
 match /projects/{projectId}/specs/{specId}/changes/{changeId} {
   allow read: if isProjectMember(projectId);
   allow create: if isAuthenticated();
 }
 
-// Spec Mappings (global learning database) - authenticated users can read and contribute
+// Spec Mappings (global learning database)
 match /specMappings/{mappingId} {
   allow read: if isAuthenticated();
   allow create, update: if isAuthenticated();
-  // Only admins can delete to prevent data loss
   allow delete: if isAdmin();
 }
 ```
@@ -877,24 +1296,28 @@ Phase 14 is complete when:
 - [ ] Spec overview page shows full configuration clearly
 - [ ] Specs can be edited via the Spec Builder UI
 - [ ] Product Managers can submit specs for review
-- [ ] Coordinators can accept/reject submitted specs
+- [ ] Coordinators can accept/reject submitted specs (with comparison view)
 - [ ] Apply Spec to BOM wizard suggests groups from learning database
-- [ ] Manual group selections are saved and improve future suggestions
+- [ ] Mappings are scoped by bike type correctly
+- [ ] Manual group selections are saved automatically (no checkbox)
+- [ ] Spec comparison shows BOM impact (groups to add/remove)
+- [ ] BOM Explorer shows spec link tags on groups
+- [ ] Groups can be manually added/removed with impact preview
+- [ ] Unlinked groups can be linked to spec categories
 - [ ] Confidence scoring shows reliability of suggestions
 - [ ] Custom items are flagged for New Parts tracking
 - [ ] Spec changes are tracked with full version history
 - [ ] Specs can be reverted to previous versions
-- [ ] Admin page allows viewing/editing spec mappings
+- [ ] Admin page allows viewing/editing spec mappings by bike type
 
 ---
 
 ## Future Enhancements (Post Phase 14)
 
 - **Bulk spec import** - Import multiple specs at once
-- **Spec templates** - Pre-configured starting points
+- **Spec templates** - Pre-configured starting points by bike type
 - **Approval chains** - Multi-level approval workflow
-- **Spec comparison** - Side-by-side compare two specs
 - **Auto-notifications** - Email/Slack when spec submitted or status changes
-- **Spec analytics** - Which options are most commonly selected
+- **Spec analytics** - Which options are most commonly selected by bike type
 - **AI suggestions** - Use patterns to predict likely configurations (integrate with Phase 12)
-
+- **Copy mappings** - Copy mappings between bike types as starting point
