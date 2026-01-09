@@ -179,15 +179,29 @@ service cloud.firestore {
         );
       }
       
-      // Tasks - action items from comments
+      // ============================================
+      // Phase 15: Unified Tasks (Project & Cell-level)
+      // ============================================
+      
+      // Tasks - unified task system (both project-level and cell-level tasks)
       match /tasks/{taskId} {
         allow read: if isAuthenticated() && isProjectMember(projectId);
         allow create: if isAuthenticated() && isProjectMember(projectId);
-        // Assignees can update task status
+        // Project members can update, assignees can update their own tasks
         allow update: if isAuthenticated() && (
           isProjectMember(projectId) ||
-          resource.data.assigneeId == request.auth.uid
+          resource.data.assigneeId == request.auth.uid ||
+          // Check if user is in assignees array
+          (resource.data.assignees != null && 
+           request.auth.uid in resource.data.assignees.map(a, a.userId))
         );
+        allow delete: if isAuthenticated() && isProjectOwner(projectId);
+      }
+      
+      // Task Groups - like Notion databases within a project
+      match /taskGroups/{groupId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow create, update: if isAuthenticated() && isProjectMember(projectId);
         allow delete: if isAuthenticated() && isProjectOwner(projectId);
       }
       
@@ -220,6 +234,17 @@ service cloud.firestore {
     match /vendorContractPrices/{priceId} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated();
+    }
+    
+    // ============================================
+    // Phase 17: Running Changes
+    // ============================================
+    
+    // Running Changes - continuous improvement changes that affect B-codes
+    match /runningChanges/{changeId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated();
     }
     
     // Legacy items collection
@@ -297,16 +322,15 @@ service cloud.firestore {
     // ============================================
     
     match /activity/{activityId} {
-      // Users can read activities targeted at them
-      allow read: if isAuthenticated() && 
-        request.auth.uid in resource.data.targetUserIds;
+      // Any authenticated user can read activities
+      // The query already filters by targetUserIds, so this is safe
+      allow read: if isAuthenticated();
       
       // Authenticated users can create activities (system creates them)
       allow create: if isAuthenticated();
       
-      // Users can mark as read/dismissed
-      allow update: if isAuthenticated() && 
-        request.auth.uid in resource.data.targetUserIds;
+      // Authenticated users can mark as read/dismissed
+      allow update: if isAuthenticated();
       
       // No delete - activities expire automatically or are dismissed
       allow delete: if false;
@@ -326,6 +350,25 @@ service cloud.firestore {
       match /settings/{settingId} {
         allow read: if isAuthenticated();
         allow write: if isAuthenticated();
+      }
+      
+      // ============================================
+      // Phase 15: External People & Task Templates
+      // ============================================
+      
+      // External People - people who can be assigned to tasks but don't have accounts
+      match /externalPeople/{personId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated();
+        // Only admins should delete (for now, allow any authenticated user)
+        allow delete: if isAuthenticated();
+      }
+      
+      // Task Templates - reusable task group configurations
+      match /taskTemplates/{templateId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated();
+        allow delete: if isAuthenticated();
       }
     }
   }

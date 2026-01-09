@@ -1,7 +1,7 @@
 # BOM Wizard - Project Plans
 
 > **Last Updated**: January 9, 2026  
-> **Current Phase**: Phase 14 - Draft PBoM, Excel-Like Table & Collaboration (NEXT)
+> **Current Phase**: Phase 15 - Task & Project Management System (NEXT)
 
 ---
 
@@ -22,8 +22,11 @@
 | 10.1 | New Parts & BOM Integration | Completed | Dec 2024 | Dec 2024 |
 | 10.15 | Project Management (PACE Gates) | Completed | Dec 2024 | Dec 2024 |
 | 10.5 | New Parts PPL (Timeline & Upgrade) | Completed | Dec 2024 | Dec 2024 |
-| **14** | **Draft PBoM, Excel-Like Table & Collaboration** | **NEXT** | - | - |
-| 15 | Spec Management System | Future | - | - |
+| 14 | Spec Management | Completed | Dec 2024 | Dec 2024 |
+| 14 | Draft PBoM, Excel-Like Table & Collaboration | Completed | Dec 2024 | Dec 2024 |
+| **15** | **Task & Project Management System** | **NEXT** | - | - |
+| 16 | Spec Management System (Enhanced) | Future | - | - |
+| 17 | Running Changes Management | Planned | - | - |
 | 12 | AI Integration | Future | - | - |
 | 13 | Final Polish & Deploy | Planned | - | - |
 
@@ -47,36 +50,44 @@
 | [phase-10.1-new-parts-bom-integration.md](./completed/phase-10.1-new-parts-bom-integration.md) | BOM to New Parts sync, order data on parts |
 | [phase-10.15-project-management.md](./completed/phase-10.15-project-management.md) | PACE gates, metrics dashboard, project overview |
 | [phase-10.5-new-parts-ppl.md](./completed/phase-10.5-new-parts-ppl.md) | Timeline & New Parts Page Upgrade, PPL replacement |
+| [phase-14-spec-management.md](./completed/phase-14-spec-management.md) | Spec as hub, learning system, group mapping |
+| [phase-14-draft-pbom.md](./completed/phase-14-draft-pbom.md) | Excel-like table, inline editing, comments, activity feed |
 
 ### Upcoming Phases
 | File | Description |
 |------|-------------|
-| [phase-14-draft-pbom.md](./upcoming/phase-14-draft-pbom.md) | Excel-like table, inline editing, comments, activity feed |
-| [phase-15-spec-management.md](./upcoming/phase-15-spec-management.md) | Spec as hub, learning system, group mapping |
+| [phase-15-task-management.md](./upcoming/phase-15-task-management.md) | Hierarchical task management, portfolio view, Kanban/Table/List views |
+| [phase-16-spec-management.md](./upcoming/phase-16-spec-management.md) | Spec as hub, learning system, group mapping (enhanced) |
+| [phase-17-running-changes.md](./upcoming/phase-17-running-changes.md) | Running changes management, BOM impact detection, part replacement |
 | [phase-12-ai-integration.md](./upcoming/phase-12-ai-integration.md) | Gemini AI assistant |
 | [phase-13-final-polish.md](./upcoming/phase-13-final-polish.md) | Final testing, deployment |
 
 ---
 
-## Phase 14 Summary (Current)
+## Phase 15 Summary (Current)
 
-**Draft PBoM, Excel-Like Table & Collaboration** introduces:
+**Task & Project Management System** introduces:
 
-1. **All 29 CCM Columns** - Full column support with visibility controls
-2. **Excel-Like Editing** - Inline cell editing with Tab/Enter navigation
-3. **Override Tracking** - Track when values differ from master data
-4. **Cell-Level History** - Granular change tracking per field
-5. **Cell Comments** - @mention teammates, create tasks
-6. **Activity Feed** - Notifications bell, /activity page
-7. **Column Settings** - Org → Project → User visibility hierarchy
+1. **Portfolio Overview** - See all projects organized by PACE gate (Timeline, Kanban, Table views)
+2. **My Tasks** - Cross-project personal task list (Today, This Week, Later, Done)
+3. **Project Task Groups** - Multiple task groups per project with Kanban/Table/List views
+4. **Custom Fields** - Add custom fields to task groups (text, number, select, date, etc.)
+5. **Task Linking** - Link tasks to BOM items, New Parts, and PACE gates
+6. **External Assignees** - Assign tasks to people without accounts
+7. **Task Templates** - System and custom templates for task groups
+8. **Subtasks** - Checklists within tasks
 
 Sub-phases:
-- 14A: Foundation (types, settings, toggle chips)
-- 14B: Excel-Like Table (inline editing, overrides)
-- 14C: Change Tracking (history, logging)
-- 14D: Comments & Tasks
-- 14E: Activity System
-- 14F: Admin Settings & Polish
+- 15.1: Foundation & Data Model
+- 15.2: Portfolio View
+- 15.3: My Tasks View
+- 15.4: Task Group Components
+- 15.5: Task Views (Kanban, Table, List)
+- 15.6: Task Detail & Editing
+- 15.7: Project Tasks Page
+- 15.8: Integrations
+- 15.9: Template Management
+- 15.10: Polish & Testing
 
 ---
 
@@ -84,8 +95,11 @@ Sub-phases:
 
 | Date | Update | Phase |
 |------|--------|-------|
+| Jan 9, 2026 | Added Phase 17 - Running Changes Management | 17 |
+| Jan 9, 2026 | Added Phase 15 - Task & Project Management System | 15 |
+| Jan 9, 2026 | Moved Spec Management to Phase 16 | 16 |
+| Jan 9, 2026 | Moved Phase 14 Draft PBoM to completed | 14 |
 | Jan 9, 2026 | Added Phase 14 - Draft PBoM, Excel-Like Table & Collaboration | 14 |
-| Jan 9, 2026 | Moved Spec Management to Phase 15 | 15 |
 | Dec 22, 2024 | Completed Phase 10.5 - Timeline & New Parts Page Upgrade | 10.5 |
 | Dec 21, 2024 | Added Project Overview page with PACE gates | 10.15 |
 | Dec 21, 2024 | Cleaned up Gantt chart for rebuild | 10.5 |
@@ -100,8 +114,9 @@ Sub-phases:
 
 ## Quick Links
 
-- **Start Next Phase**: [Phase 14 - Draft PBoM](./upcoming/phase-14-draft-pbom.md)
-- **Spec Management**: [Phase 15 - Spec Management](./upcoming/phase-15-spec-management.md)
+- **Start Next Phase**: [Phase 15 - Task & Project Management](./upcoming/phase-15-task-management.md)
+- **Spec Management**: [Phase 16 - Spec Management](./upcoming/phase-16-spec-management.md)
+- **Running Changes**: [Phase 17 - Running Changes Management](./upcoming/phase-17-running-changes.md)
 - **AI Integration Plan**: [Phase 12 - AI Integration](./upcoming/phase-12-ai-integration.md)
 - **Final Polish Plan**: [Phase 13 - Final Polish & Deploy](./upcoming/phase-13-final-polish.md)
 
@@ -129,7 +144,9 @@ BOM Wizard is a Bill of Materials management system that helps manufacturers:
 - **Manage** projects with PACE gates and timelines
 - **Edit** BOMs with Excel-like inline editing (Phase 14)
 - **Collaborate** with cell comments and activity feed (Phase 14)
-- **Spec** products using spec sheets with learning system (Phase 15)
+- **Track** tasks across projects with hierarchical task management (Phase 15)
+- **Spec** products using spec sheets with learning system (Phase 16)
+- **Manage** running changes with BOM impact detection and part replacement (Phase 17)
 - **AI-Assist** users with intelligent suggestions (Phase 12)
 
 ---
@@ -152,10 +169,13 @@ docs/plans/
 │   ├── phase-9.5-merge-timeline.md
 │   ├── phase-10.1-new-parts-bom-integration.md
 │   ├── phase-10.15-project-management.md
-│   └── phase-10.5-new-parts-ppl.md
+│   ├── phase-10.5-new-parts-ppl.md
+│   ├── phase-14-spec-management.md
+│   └── phase-14-draft-pbom.md
 └── upcoming/
-    ├── phase-14-draft-pbom.md
-    ├── phase-15-spec-management.md
+    ├── phase-15-task-management.md
+    ├── phase-16-spec-management.md
+    ├── phase-17-running-changes.md
     ├── phase-12-ai-integration.md
     └── phase-13-final-polish.md
 ```

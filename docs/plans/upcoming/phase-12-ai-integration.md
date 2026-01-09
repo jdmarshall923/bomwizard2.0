@@ -2,7 +2,7 @@
 
 **Status**: 📋 Future Enhancement  
 **Estimated Duration**: 3-4 weeks  
-**Dependencies**: Phases 9-11 complete
+**Dependencies**: Phase 14 (Draft PBoM), Phase 15 (Task Management)
 
 ---
 

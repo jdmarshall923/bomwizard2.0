@@ -350,7 +350,7 @@ When user changes a value from master data or calculation:
 ## Files to Modify
 
 | File | Changes |
-|------|---------|
+|------|--------|
 | `types/bom.ts` | Add missing CCM fields + cellMetadata |
 | `components/bom/BomTable.tsx` | Enhance for inline edit or replace with ExcelTable |
 | `components/bom/ItemEditDrawer.tsx` | Add History & Comments tabs |

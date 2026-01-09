@@ -250,8 +250,8 @@ export async function updateProjectMetrics(
  * Fetch working BOM items for metrics calculation
  */
 export async function fetchBomItemsForMetrics(projectId: string): Promise<BomItemForMetrics[]> {
-  const workingBomRef = collection(db, 'projects', projectId, 'workingBom');
-  const snapshot = await getDocs(query(workingBomRef));
+  const bomItemsRef = collection(db, 'projects', projectId, 'bomItems');
+  const snapshot = await getDocs(query(bomItemsRef));
   
   return snapshot.docs.map(doc => {
     const data = doc.data();

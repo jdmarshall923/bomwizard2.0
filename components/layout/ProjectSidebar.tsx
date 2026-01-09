@@ -16,12 +16,14 @@ import {
   Sparkles,
   Target,
   ClipboardList,
+  CheckSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const projectNavigation = [
   { name: 'Overview', href: '/project/[projectId]/overview', icon: Target },
   { name: 'Spec', href: '/project/[projectId]/spec', icon: ClipboardList },
+  { name: 'Tasks', href: '/project/[projectId]/tasks', icon: CheckSquare },
   { name: 'BOM Explorer', href: '/project/[projectId]/bom', icon: FileText },
   { name: 'Cost Analysis', href: '/project/[projectId]/costs', icon: TrendingUp },
   { name: 'Version History', href: '/project/[projectId]/versions', icon: Clock },

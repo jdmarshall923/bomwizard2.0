@@ -11,7 +11,10 @@ import { BomTransferBar } from '@/components/bom/BomTransferBar';
 import { ItemEditDrawer } from '@/components/bom/ItemEditDrawer';
 import { AddGroupDialog } from '@/components/bom/AddGroupDialog';
 import { BatchAddItemsDialog } from '@/components/bom/BatchAddItemsDialog';
+import { RunningChangesAlert } from '@/components/bom/RunningChangesAlert';
+import { RunningChangesPanel } from '@/components/bom/RunningChangesPanel';
 import { useBom, useTemplateBom } from '@/lib/hooks/useBom';
+import { useAffectedParts } from '@/lib/hooks/useAffectedParts';
 import { transferItemsToWorkingBom, getDuplicateCount } from '@/lib/bom/transferService';
 import { applyVendorPricesToBom } from '@/lib/bom/vendorPriceService';
 import { getBomGroups } from '@/lib/bom/templateBomService';
@@ -49,6 +52,9 @@ export default function BomControlPanelPage() {
   // Dialog state
   const [isAddItemsOpen, setIsAddItemsOpen] = useState(false);
   const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
+  
+  // Running changes panel state
+  const [showRunningChangesPanel, setShowRunningChangesPanel] = useState(false);
   
   // Panel expand/collapse state
   const [isTemplatePanelCollapsed, setIsTemplatePanelCollapsed] = useState(false);
@@ -89,6 +95,24 @@ export default function BomControlPanelPage() {
     error: templateError,
     hasTemplate,
   } = useTemplateBom(projectId);
+
+  // Get project DTx date for running changes comparison
+  const projectDtxDate = useMemo(() => {
+    if (!project?.gates?.dtx) return null;
+    const dtxGate = project.gates.dtx;
+    // Use completedAt if the gate is passed, otherwise use the target date
+    if (dtxGate.completedAt) return dtxGate.completedAt.toDate?.() || null;
+    if (dtxGate.date) return dtxGate.date.toDate?.() || null;
+    return null;
+  }, [project]);
+
+  // Check for running changes affecting this BOM
+  const {
+    affectedItems,
+    affectedCount,
+    hasAffectedItems,
+    loading: runningChangesLoading,
+  } = useAffectedParts(bomItems, { projectDtxDate });
 
   // Load BOM groups
   useEffect(() => {
@@ -329,6 +353,30 @@ export default function BomControlPanelPage() {
           )}
         </div>
       </div>
+
+      {/* Running Changes Alert */}
+      {(hasAffectedItems || runningChangesLoading) && !showRunningChangesPanel && (
+        <RunningChangesAlert
+          affectedCount={affectedCount}
+          loading={runningChangesLoading}
+          onViewAffectedParts={() => setShowRunningChangesPanel(true)}
+          className="mb-4"
+        />
+      )}
+
+      {/* Running Changes Panel */}
+      {showRunningChangesPanel && (
+        <RunningChangesPanel
+          projectId={projectId}
+          affectedItems={affectedItems}
+          loading={runningChangesLoading}
+          onClose={() => setShowRunningChangesPanel(false)}
+          onReplacement={() => {
+            // BOM will auto-refresh via useBom hook
+          }}
+          className="mb-4"
+        />
+      )}
 
       {/* Main content - Master Detail Layout */}
       <div className="flex-1 min-h-0 flex flex-col">

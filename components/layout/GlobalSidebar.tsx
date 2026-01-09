@@ -3,13 +3,15 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, FolderOpen, Package, Building2, PoundSterling, Settings, Plug, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardList, Activity, Layers } from 'lucide-react';
+import { Home, FolderOpen, Package, Building2, PoundSterling, Settings, Plug, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardList, Activity, Layers, LayoutDashboard, CheckSquare, RefreshCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { NotificationBell } from '@/components/activity/NotificationBell';
 
 const navigation = [
   { name: 'Home', href: '/', icon: Home },
+  { name: 'Portfolio', href: '/portfolio', icon: LayoutDashboard },
   { name: 'Projects', href: '/projects', icon: FolderOpen },
+  { name: 'My Tasks', href: '/tasks', icon: CheckSquare },
   { name: 'Specs', href: '/specs', icon: ClipboardList },
   { name: 'Pending Specs', href: '/specs/pending', icon: ClipboardCheck },
   { name: 'Activity', href: '/activity', icon: Activity },
@@ -19,6 +21,7 @@ const navigation = [
       { name: 'SLItems', href: '/data/sl-items', icon: Package },
       { name: 'SLVendors', href: '/data/sl-vendors', icon: Building2 },
       { name: 'VendorContractPrices', href: '/data/vendor-contract-prices', icon: PoundSterling },
+      { name: 'Running Changes', href: '/data/running-changes', icon: RefreshCcw },
     ],
   },
   {

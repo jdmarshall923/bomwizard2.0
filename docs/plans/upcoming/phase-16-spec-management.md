@@ -1,8 +1,8 @@
-# Phase 15: Spec Management System
+# Phase 16: Spec Management System
 
 **Status**: 📋 Future  
 **Estimated Duration**: 3-4 weeks  
-**Dependencies**: Phase 14 (Draft PBoM & Collaboration)
+**Dependencies**: Phase 15 (Task & Project Management)
 
 ---
 
@@ -251,4 +251,4 @@ Enhanced Configure page with table + sidebar filters:
 - [ ] Groups table view with sidebar filters
 - [ ] Firebase deployed without index errors
 - [ ] Existing BOM flow unchanged (no breaking changes)
-- [ ] Phase 15 documentation updated
+- [ ] Phase 16 documentation updated
