@@ -24,7 +24,7 @@ import {
   Check, 
   X,
   Link2,
-  LinkOff,
+  Link2Off,
   AlertCircle,
   Sparkles
 } from 'lucide-react';
@@ -68,7 +68,7 @@ export function SpecConfigTable({
       unmapped: {
         label: 'Unmapped',
         className: 'bg-slate-100 text-slate-600 border-slate-200',
-        Icon: LinkOff,
+        Icon: Link2Off,
       },
       partial: {
         label: 'Partial',
