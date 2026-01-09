@@ -137,6 +137,65 @@ service cloud.firestore {
         allow read: if isAuthenticated() && isProjectMember(projectId);
         allow write: if isAuthenticated() && isProjectMember(projectId);
       }
+      
+      // ============================================
+      // Phase 14: Collaboration Sub-collections
+      // ============================================
+      
+      // Change Records - cell-level change history
+      match /changeRecords/{recordId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow create: if isAuthenticated() && isProjectMember(projectId);
+        allow update: if false; // Change records are immutable
+        allow delete: if isAuthenticated() && isProjectOwner(projectId);
+      }
+      
+      // Change Batches - grouped changes
+      match /changeBatches/{batchId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow create: if isAuthenticated() && isProjectMember(projectId);
+        allow update: if false; // Batches are immutable
+        allow delete: if isAuthenticated() && isProjectOwner(projectId);
+      }
+      
+      // Comment Threads - discussions on cells
+      match /commentThreads/{threadId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow create: if isAuthenticated() && isProjectMember(projectId);
+        allow update: if isAuthenticated() && isProjectMember(projectId);
+        allow delete: if isAuthenticated() && isProjectOwner(projectId);
+      }
+      
+      // Comments - individual comments in threads
+      match /comments/{commentId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow create: if isAuthenticated() && isProjectMember(projectId);
+        // Only owner can edit/delete their own comments
+        allow update: if isAuthenticated() && 
+          resource.data.createdBy == request.auth.uid;
+        allow delete: if isAuthenticated() && (
+          resource.data.createdBy == request.auth.uid ||
+          isProjectOwner(projectId)
+        );
+      }
+      
+      // Tasks - action items from comments
+      match /tasks/{taskId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow create: if isAuthenticated() && isProjectMember(projectId);
+        // Assignees can update task status
+        allow update: if isAuthenticated() && (
+          isProjectMember(projectId) ||
+          resource.data.assigneeId == request.auth.uid
+        );
+        allow delete: if isAuthenticated() && isProjectOwner(projectId);
+      }
+      
+      // Project Settings (column visibility, etc.)
+      match /settings/{settingId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow write: if isAuthenticated() && isProjectOwner(projectId);
+      }
     }
     
     // ============================================
@@ -225,6 +284,49 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.auth.uid == userId;
       allow update: if isAuthenticated() && request.auth.uid == userId;
       allow delete: if false; // Users cannot delete their profiles
+      
+      // User Preferences (Phase 14)
+      match /preferences/{prefId} {
+        allow read: if isAuthenticated() && request.auth.uid == userId;
+        allow write: if isAuthenticated() && request.auth.uid == userId;
+      }
+    }
+    
+    // ============================================
+    // Phase 14: Activity Collection (Global)
+    // ============================================
+    
+    match /activity/{activityId} {
+      // Users can read activities targeted at them
+      allow read: if isAuthenticated() && 
+        request.auth.uid in resource.data.targetUserIds;
+      
+      // Authenticated users can create activities (system creates them)
+      allow create: if isAuthenticated();
+      
+      // Users can mark as read/dismissed
+      allow update: if isAuthenticated() && 
+        request.auth.uid in resource.data.targetUserIds;
+      
+      // No delete - activities expire automatically or are dismissed
+      allow delete: if false;
+    }
+    
+    // ============================================
+    // Phase 14: Organization Settings
+    // ============================================
+    
+    match /organizations/{orgId} {
+      allow read: if isAuthenticated();
+      // For now, allow authenticated users to manage orgs
+      // TODO: Add proper role-based access control
+      allow write: if isAuthenticated();
+      
+      // Organization Settings
+      match /settings/{settingId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated();
+      }
     }
   }
 }

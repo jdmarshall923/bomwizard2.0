@@ -206,67 +206,135 @@ export interface TemplateBomItem {
 }
 
 /**
+ * Cell metadata for tracking overrides and comments per field
+ * Used in BomItem.cellMetadata map
+ */
+export interface CellMetadata {
+  source: 'manual' | 'calculated' | 'master' | 'imported';
+  originalValue?: string | number | boolean | null;
+  overriddenAt?: Timestamp;
+  overriddenBy?: string;
+  overrideReason?: string;
+  hasComments?: boolean;
+  commentCount?: number;
+}
+
+/**
  * Working BOM Item - Editable copy for cost building
  * Created from selected template groups, contains only chosen configurations
  * Stored in: projects/{projectId}/bomItems/{itemId}
+ * 
+ * Supports all 29 CCM columns (Phase 14)
  */
 export interface BomItem {
   id: string;
   
-  // Hierarchy structure (from template)
-  level: number;               // 0, 1, 2, 3, 4...
+  // ============================================
+  // HIERARCHY STRUCTURE
+  // Levels chain to preceding parent: 1-2-2-3-4-4-2 means
+  // L3 is child of last L2, L4s are children of L3, final L2 is sibling
+  // ============================================
+  level: number;               // 0 = top assembly, 1 = group, 2+ = nested items
   groupCode: string;           // Parent group (GRP-xxx)
-  parentItemCode?: string;     // Parent item for nested items
-  sequence: number;
+  parentItemCode?: string;     // Parent item for nested items (determined by level chain)
+  sequence: number;            // Sort order (100, 110, 120... with gaps for insertion)
   
-  // Item identification
-  itemCode: string;
-  itemDescription: string;
+  // ============================================
+  // CCM COLUMNS A-J: CORE IDENTIFICATION
+  // ============================================
+  partCategory?: string;             // A: Part category (e.g., "Frame", "Drivetrain")
+  drawingNumber?: string;            // B: Drawing Number
+  revision?: string;                 // C: Revision
+  // level is column D
+  itemCode: string;                  // E: Item (B-Code or G-Code)
+  // groupCode is column F
+  itemDescription: string;           // G: Description
+  quantity: number;                  // H: Qty per CPQ
+  purchasedOrManufactured?: 'P' | 'M'; // I: Purchased or Manufactured flag
+  // sequence is column J
+  
+  // ============================================
+  // CCM COLUMNS K-N: STATUS & CLASSIFICATION
+  // ============================================
+  pdmWorkflowState?: string;         // K: PDM workflow state
+  bikeCategory?: string;             // L: Bike Category (for KPI)
+  bikeType?: string;                 // M: Bike Type (for CCM)
+  functionalCategory?: string;       // N: Category (Functional systems)
+  
+  // ============================================
+  // CCM COLUMNS O-S: VENDOR & PRICING
+  // ============================================
+  costSource: 'placeholder' | 'estimate' | 'quote' | 'contract'; // O: Piece cost source
+  vendorCode?: string;               // P: Contract Vendor (code)
+  vendorName?: string;               // P: Contract Vendor (name)
+  vendorLocalPrice?: number;         // Q: Vendor contract price local currency
+  vendorCurrency?: string;           // R: Vendor local currency
+  shipFromCountry?: string;          // S: Contract Vendor Ship from Country
+  
+  // ============================================
+  // CCM COLUMNS T-Y: COSTING
+  // ============================================
+  materialCost: number;              // T: Material cost (£)
+  materialCostExtended?: number;     // U: Material cost (£) x Qty per CPQ (calculated)
+  landingCost: number;               // V: Landing cost (£)
+  landingCostExtended?: number;      // W: Qty per CPQ x Landing Cost (£) (calculated)
+  labourCost: number;                // X: Labour cost (£)
+  labourCostExtended?: number;       // Y: Labour cost (£) x Qty per CPQ (calculated)
+  extendedCost: number;              // Total: qty * (material + landing + labour)
+  
+  // ============================================
+  // CCM COLUMNS Z-AA: WEIGHT
+  // ============================================
+  weightKg?: number;                 // Z: Weight (kg)
+  weightExtended?: number;           // AA: Weight (kg) x Qty per CPQ (calculated)
+  
+  // ============================================
+  // CCM COLUMNS AB-AC: REFERENCE
+  // ============================================
+  crcn?: string;                     // AB: CRCN
+  targetSwitchStatus?: string;       // AC: Target Switch/Status
+  
+  // ============================================
+  // ITEM TYPE & SOURCE
+  // ============================================
   itemType: BomItemType;
   source: ItemSource;
-  isPlaceholder: boolean;      // Items without complete B code (B + 6 digits, e.g., B123456)
-  
-  // Quantities
-  quantity: number;
+  isPlaceholder: boolean;            // Items without complete B code (B + 6 digits)
   unitOfMeasure: string;
   
-  // Legacy fields (for backward compatibility)
+  // ============================================
+  // LEGACY & COMPATIBILITY FIELDS
+  // ============================================
   assemblyId?: string;
   assemblyCode?: string;
   itemId?: string;
-  partCategory?: 'new_part' | 'existing_part';
-  
-  // Current costs (editable)
-  materialCost: number;
-  landingCost: number;
-  labourCost: number;
-  extendedCost: number;        // qty * (material + landing + labour)
-  
-  // Cost source tracking
-  costSource: 'placeholder' | 'estimate' | 'quote' | 'contract';
-  vendorId?: string;           // Legacy field
+  vendorId?: string;
   quoteId?: string;
-  contractPriceId?: string;    // Legacy field
+  contractPriceId?: string;
+  currency?: string;                 // Legacy - use vendorCurrency
   
-  // Vendor Contract Price link (from VendorContractPrices.csv)
+  // ============================================
+  // VENDOR CONTRACT PRICE LINK
+  // ============================================
   vendorContractPriceId?: string;
-  vendorCode?: string;
-  vendorName?: string;
-  currency?: string;
-  moq?: number;                // Minimum order quantity
+  moq?: number;                      // Minimum order quantity
   leadTimeDays?: number;
-  landingPct?: number;         // Landing percentage from contract
+  landingPct?: number;               // Landing percentage from contract
   contractStatus?: 'active' | 'expired' | 'pending';
   effectiveDate?: Timestamp;
   expiryDate?: Timestamp;
   
-  // Template reference
-  templateItemId?: string;     // ID of the TemplateBomItem this was created from
-  isFromTemplate: boolean;     // Was this item created from a template?
-  isAddedItem: boolean;        // Was this item added after template/group selection?
-  isCustomGroup: boolean;      // Is this in a user-created group (not from template)?
+  // ============================================
+  // TEMPLATE REFERENCE
+  // ============================================
+  templateItemId?: string;           // ID of TemplateBomItem this was created from
+  isFromTemplate: boolean;           // Was this created from a template?
+  isAddedItem: boolean;              // Was this added after template/group selection?
+  isCustomGroup: boolean;            // Is this in a user-created group?
   
-  // Change tracking
+  // ============================================
+  // CHANGE TRACKING (Item-Level)
+  // ============================================
   hasCostChange: boolean;
   hasQuantityChange: boolean;
   originalMaterialCost?: number;
@@ -274,18 +342,31 @@ export interface BomItem {
   originalLabourCost?: number;
   originalQuantity?: number;
   
-  // Notes and flags
+  // ============================================
+  // CELL-LEVEL METADATA (Phase 14)
+  // Tracks overrides and comments per field
+  // Key is field name, value is CellMetadata
+  // ============================================
+  cellMetadata?: Record<string, CellMetadata>;
+  
+  // ============================================
+  // NOTES AND FLAGS
+  // ============================================
   notes?: string;
-  isIncomplete?: boolean;      // Missing required fields
+  isIncomplete?: boolean;            // Missing required fields
   
-  // New Part tracking (Phase 3.7 - set during batch add)
-  isNewPart: boolean;              // Flag: needs to go through design/procurement
-  newPartStatus?: NewPartStatus;   // Current status in new part workflow
-  newPartTrackerId?: string;       // Link to NewPart document (set by Phase 7)
-  newPartAddedAt?: Timestamp;      // When flagged as new part
-  finalItemCode?: string;          // Final B-code when part is complete
+  // ============================================
+  // NEW PART TRACKING (Phase 3.7)
+  // ============================================
+  isNewPart: boolean;                // Flag: needs design/procurement workflow
+  newPartStatus?: NewPartStatus;     // Current status in workflow
+  newPartTrackerId?: string;         // Link to NewPart document
+  newPartAddedAt?: Timestamp;        // When flagged as new part
+  finalItemCode?: string;            // Final B-code when complete
   
-  // Metadata
+  // ============================================
+  // METADATA
+  // ============================================
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
   updatedBy?: string;

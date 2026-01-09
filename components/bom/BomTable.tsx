@@ -1,7 +1,7 @@
 'use client';
 
 import { BomItem } from '@/types';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -30,15 +30,48 @@ import {
   ChevronRight, 
   ChevronsLeft, 
   ChevronsRight,
+  ChevronDown,
+  ChevronRightIcon,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
   Sparkles,
   AlertCircle,
   Package,
-  Boxes
+  Boxes,
+  FolderOpen,
+  Folder,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+// Simplified column groups for current BomTable
+type TableColumnGroup = 'core' | 'costing' | 'status';
+
+interface TableColumnGroupDef {
+  id: TableColumnGroup;
+  displayName: string;
+  columns: string[];
+  alwaysVisible?: boolean;
+}
+
+const TABLE_COLUMN_GROUPS: TableColumnGroupDef[] = [
+  { 
+    id: 'core', 
+    displayName: 'Core', 
+    columns: ['itemCode', 'group', 'itemDescription', 'level', 'quantity'],
+    alwaysVisible: true,
+  },
+  { 
+    id: 'costing', 
+    displayName: 'Costing', 
+    columns: ['materialCost', 'landingCost', 'labourCost', 'extendedCost', 'costSource'],
+  },
+  { 
+    id: 'status', 
+    displayName: 'Status', 
+    columns: ['isNewPart'],
+  },
+];
 
 interface BomTableProps {
   items: BomItem[];
@@ -47,6 +80,7 @@ interface BomTableProps {
   loading?: boolean;
   pageSize?: number;
   readOnly?: boolean;
+  showColumnToggles?: boolean;
 }
 
 const columnHelper = createColumnHelper<BomItem>();
@@ -58,10 +92,136 @@ export function BomTable({
   loading = false,
   pageSize = 25,
   readOnly = false,
+  showColumnToggles = true,
 }: BomTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  
+  // Column group visibility state - Phase 14 (simplified for this table)
+  const [visibleGroups, setVisibleGroups] = useState<TableColumnGroup[]>(['core', 'costing', 'status']);
+  
+  // Expanded groups state - track which group rows are expanded
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  
+  // Toggle a column group
+  const handleToggleGroup = useCallback((groupId: TableColumnGroup) => {
+    const group = TABLE_COLUMN_GROUPS.find(g => g.id === groupId);
+    if (group?.alwaysVisible) return;
+    
+    setVisibleGroups(prev => {
+      const isVisible = prev.includes(groupId);
+      return isVisible 
+        ? prev.filter(g => g !== groupId)
+        : [...prev, groupId];
+    });
+  }, []);
+  
+  // Toggle expand/collapse for a group row
+  const handleToggleExpand = useCallback((groupCode: string) => {
+    setExpandedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupCode)) {
+        newSet.delete(groupCode);
+      } else {
+        newSet.add(groupCode);
+      }
+      return newSet;
+    });
+  }, []);
+  
+  // Expand all groups
+  const handleExpandAll = useCallback(() => {
+    const allGroups = new Set(items.map(item => item.assemblyCode || item.groupCode).filter(Boolean) as string[]);
+    setExpandedGroups(allGroups);
+  }, [items]);
+  
+  // Collapse all groups
+  const handleCollapseAll = useCallback(() => {
+    setExpandedGroups(new Set());
+  }, []);
+  
+  // Process items to create group rows and filter based on expansion
+  const processedItems = useMemo(() => {
+    // Get unique groups
+    const groupMap = new Map<string, { groupItem: BomItem | null; children: BomItem[] }>();
+    
+    items.forEach(item => {
+      const groupCode = item.assemblyCode || item.groupCode || '';
+      if (!groupCode) return;
+      
+      if (!groupMap.has(groupCode)) {
+        groupMap.set(groupCode, { groupItem: null, children: [] });
+      }
+      
+      const group = groupMap.get(groupCode)!;
+      
+      // Check if this item IS the group row (level 0 or 1, or itemType === 'group')
+      if (item.itemType === 'group' || item.level === 0 || item.level === 1) {
+        group.groupItem = item;
+      } else {
+        group.children.push(item);
+      }
+    });
+    
+    // Build the display list
+    const result: BomItem[] = [];
+    
+    groupMap.forEach((group, groupCode) => {
+      // Add the group header row
+      if (group.groupItem) {
+        // Use the existing group item
+        result.push({
+          ...group.groupItem,
+          _isGroupRow: true,
+          _childCount: group.children.length,
+        } as BomItem & { _isGroupRow: boolean; _childCount: number });
+      } else if (group.children.length > 0) {
+        // Create a synthetic group row from first child
+        const firstChild = group.children[0];
+        result.push({
+          id: `group-${groupCode}`,
+          itemCode: groupCode,
+          itemDescription: `${groupCode} Assembly`,
+          assemblyCode: groupCode,
+          groupCode: groupCode,
+          level: 1,
+          quantity: 1,
+          itemType: 'group',
+          _isGroupRow: true,
+          _childCount: group.children.length,
+        } as BomItem & { _isGroupRow: boolean; _childCount: number });
+      }
+      
+      // Add children if expanded
+      if (expandedGroups.has(groupCode)) {
+        group.children.forEach(child => {
+          result.push({
+            ...child,
+            _isGroupRow: false,
+            _parentGroup: groupCode,
+          } as BomItem & { _isGroupRow: boolean; _parentGroup: string });
+        });
+      }
+    });
+    
+    return result;
+  }, [items, expandedGroups]);
+  
+  // Map column group visibility to TanStack table visibility
+  useEffect(() => {
+    const newVisibility: VisibilityState = {};
+    
+    // Go through each group and set visibility for its columns
+    TABLE_COLUMN_GROUPS.forEach(group => {
+      const isVisible = group.alwaysVisible || visibleGroups.includes(group.id);
+      group.columns.forEach(col => {
+        newVisibility[col] = isVisible;
+      });
+    });
+    
+    setColumnVisibility(newVisibility);
+  }, [visibleGroups]);
 
   const isPlaceholder = (itemCode: string) => {
     // Complete B code = B + exactly 6 numbers (e.g., B123456)
@@ -72,31 +232,7 @@ export function BomTable({
   };
 
   const columns = useMemo(() => [
-    columnHelper.accessor('assemblyCode', {
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="-ml-3 h-8 data-[state=open]:bg-accent"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Assembly
-          {column.getIsSorted() === 'asc' ? (
-            <ArrowUp className="ml-2 h-4 w-4" />
-          ) : column.getIsSorted() === 'desc' ? (
-            <ArrowDown className="ml-2 h-4 w-4" />
-          ) : (
-            <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
-          )}
-        </Button>
-      ),
-      cell: ({ row }) => (
-        <div className="flex items-center gap-2">
-          <Boxes className="h-4 w-4 text-[var(--accent-blue)]" />
-          <span className="font-medium">{row.getValue('assemblyCode')}</span>
-        </div>
-      ),
-    }),
+    // Item Code - FIRST column with expand/collapse for groups
     columnHelper.accessor('itemCode', {
       header: ({ column }) => (
         <Button
@@ -117,7 +253,76 @@ export function BomTable({
       ),
       cell: ({ row }) => {
         const code = row.getValue('itemCode') as string;
-        const item = row.original;
+        const item = row.original as BomItem & { _isGroupRow?: boolean; _childCount?: number; _parentGroup?: string };
+        const isGroupRow = item._isGroupRow === true;
+        const groupCode = item.assemblyCode || item.groupCode || '';
+        const isExpanded = expandedGroups.has(groupCode);
+        const childCount = (item as any)._childCount || 0;
+        
+        // Child row - indented
+        if (!isGroupRow && item._parentGroup) {
+          return (
+            <div className="flex items-center gap-2 pl-6">
+              <Package className={cn(
+                'h-4 w-4',
+                item.partCategory === 'new_part' 
+                  ? 'text-[var(--accent-blue)]' 
+                  : isPlaceholder(code)
+                    ? 'text-[var(--accent-orange)]'
+                    : 'text-[var(--text-tertiary)]'
+              )} />
+              <span className={cn(
+                'font-mono',
+                item.partCategory === 'new_part' && 'text-[var(--accent-blue)] font-medium',
+                isPlaceholder(code) && 'text-[var(--accent-orange)]'
+              )}>
+                {code}
+              </span>
+              {item.partCategory === 'new_part' && (
+                <Sparkles className="h-3.5 w-3.5 text-[var(--accent-blue)]" />
+              )}
+              {isPlaceholder(code) && (
+                <AlertCircle className="h-3.5 w-3.5 text-[var(--accent-orange)]" />
+              )}
+            </div>
+          );
+        }
+        
+        // Group row - with expand/collapse
+        if (isGroupRow) {
+          return (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleExpand(groupCode);
+                }}
+                className="p-0.5 hover:bg-[var(--bg-tertiary)] rounded transition-colors"
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4 text-[var(--text-secondary)]" />
+                ) : (
+                  <ChevronRightIcon className="h-4 w-4 text-[var(--text-secondary)]" />
+                )}
+              </button>
+              {isExpanded ? (
+                <FolderOpen className="h-4 w-4 text-[var(--accent-green)]" />
+              ) : (
+                <Folder className="h-4 w-4 text-[var(--accent-green)]" />
+              )}
+              <span className="font-mono font-bold text-[var(--text-primary)]">
+                {code}
+              </span>
+              {childCount > 0 && (
+                <Badge variant="secondary" className="ml-1 text-xs px-1.5 py-0">
+                  {childCount}
+                </Badge>
+              )}
+            </div>
+          );
+        }
+        
+        // Regular item (no grouping)
         return (
           <div className="flex items-center gap-2">
             <Package className={cn(
@@ -130,16 +335,57 @@ export function BomTable({
             )} />
             <span className={cn(
               'font-mono',
-              item.partCategory === 'new_part' && 'text-[var(--accent-blue)] font-medium',
-              isPlaceholder(code) && 'text-[var(--accent-orange)]'
+              isGroupRow && 'font-bold text-[var(--text-primary)]',
+              item.partCategory === 'new_part' && !isGroupRow && 'text-[var(--accent-blue)] font-medium',
+              isPlaceholder(code) && !isGroupRow && 'text-[var(--accent-orange)]'
             )}>
               {code}
             </span>
-            {item.partCategory === 'new_part' && (
+            {item.partCategory === 'new_part' && !isGroupRow && (
               <Sparkles className="h-3.5 w-3.5 text-[var(--accent-blue)]" />
             )}
-            {isPlaceholder(code) && (
+            {isPlaceholder(code) && !isGroupRow && (
               <AlertCircle className="h-3.5 w-3.5 text-[var(--accent-orange)]" />
+            )}
+          </div>
+        );
+      },
+    }),
+    // Group - SECOND column (renamed from Assembly)
+    columnHelper.accessor('assemblyCode', {
+      id: 'group',
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-3 h-8 data-[state=open]:bg-accent"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+        >
+          Group
+          {column.getIsSorted() === 'asc' ? (
+            <ArrowUp className="ml-2 h-4 w-4" />
+          ) : column.getIsSorted() === 'desc' ? (
+            <ArrowDown className="ml-2 h-4 w-4" />
+          ) : (
+            <ArrowUpDown className="ml-2 h-4 w-4 opacity-50" />
+          )}
+        </Button>
+      ),
+      cell: ({ row }) => {
+        const item = row.original;
+        const isGroupRow = item.itemType === 'group' || item.level === 0;
+        
+        return (
+          <div className="flex items-center gap-2">
+            {!isGroupRow && (
+              <span className="text-[var(--text-secondary)] pl-4">
+                {row.getValue('group')}
+              </span>
+            )}
+            {isGroupRow && (
+              <span className="font-medium text-[var(--accent-blue)]">
+                {row.getValue('group')}
+              </span>
             )}
           </div>
         );
@@ -327,7 +573,7 @@ export function BomTable({
   ], []);
 
   const table = useReactTable({
-    data: items,
+    data: processedItems,
     columns,
     state: {
       sorting,
@@ -354,7 +600,7 @@ export function BomTable({
         <Table>
           <TableHeader>
             <TableRow>
-              {['Assembly', 'Item Code', 'Description', 'Level', 'Qty', 'Material', 'Landing', 'Labour', 'Extended', 'Source', 'Status'].map(header => (
+              {['Item Code', 'Group', 'Description', 'Level', 'Qty', 'Material', 'Landing', 'Labour', 'Extended', 'Source', 'Status'].map(header => (
                 <TableHead key={header}>{header}</TableHead>
               ))}
             </TableRow>
@@ -389,6 +635,61 @@ export function BomTable({
 
   return (
     <div className="space-y-4">
+      {/* Column Group Toggles & Expand/Collapse - Phase 14 */}
+      {showColumnToggles && (
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {TABLE_COLUMN_GROUPS.map((group) => {
+              const isVisible = visibleGroups.includes(group.id);
+              const isDisabled = group.alwaysVisible;
+              
+              return (
+                <button
+                  key={group.id}
+                  onClick={() => !isDisabled && handleToggleGroup(group.id)}
+                  disabled={isDisabled}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
+                    'border focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[var(--accent-blue)]',
+                    isVisible
+                      ? 'bg-[var(--accent-blue)] text-white border-[var(--accent-blue)]'
+                      : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:bg-[var(--bg-tertiary)]',
+                    isDisabled && 'opacity-60 cursor-not-allowed',
+                    group.alwaysVisible && 'cursor-default'
+                  )}
+                  title={`${group.columns.length} columns`}
+                >
+                  {isVisible && <span className="text-xs">✓</span>}
+                  {group.displayName}
+                </button>
+              );
+            })}
+          </div>
+          
+          {/* Expand/Collapse All */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleExpandAll}
+              className="h-7 text-xs"
+            >
+              <ChevronDown className="h-3.5 w-3.5 mr-1" />
+              Expand All
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCollapseAll}
+              className="h-7 text-xs"
+            >
+              <ChevronRightIcon className="h-3.5 w-3.5 mr-1" />
+              Collapse All
+            </Button>
+          </div>
+        </div>
+      )}
+      
       {/* Table */}
       <div className="rounded-md border border-[var(--border-subtle)] overflow-hidden">
         <Table>
@@ -409,25 +710,38 @@ export function BomTable({
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows.map((row) => (
-              <TableRow
-                key={row.id}
-                className={cn(
-                  'transition-colors',
-                  !readOnly && 'cursor-pointer hover:bg-[var(--bg-tertiary)]',
-                  readOnly && 'cursor-default',
-                  selectedItemId === row.original.id && 'bg-[var(--accent-blue)]/10',
-                  row.original.isNewPart && 'bg-[var(--accent-purple)]/5'
-                )}
-                onClick={() => !readOnly && onItemClick?.(row.original)}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
+            {table.getRowModel().rows.map((row) => {
+              const item = row.original as BomItem & { _isGroupRow?: boolean; _parentGroup?: string };
+              const isGroupRow = item._isGroupRow === true;
+              const isChildRow = !!item._parentGroup;
+              const isNewPart = item.isNewPart && !isGroupRow;
+              
+              return (
+                <TableRow
+                  key={row.id}
+                  className={cn(
+                    'transition-colors',
+                    !readOnly && 'cursor-pointer hover:bg-[var(--bg-tertiary)]',
+                    readOnly && 'cursor-default',
+                    // Group rows - olive green background
+                    isGroupRow && 'bg-[#808000]/20 hover:bg-[#808000]/30 font-semibold',
+                    // Child rows - slightly indented look
+                    isChildRow && 'bg-[var(--bg-primary)]',
+                    // Selected row
+                    selectedItemId === row.original.id && !isGroupRow && 'bg-[var(--accent-blue)]/10',
+                    // New part rows - light yellow background
+                    isNewPart && 'bg-yellow-100/50 dark:bg-yellow-900/20'
+                  )}
+                  onClick={() => !readOnly && onItemClick?.(row.original)}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>
@@ -438,9 +752,9 @@ export function BomTable({
           Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
           {Math.min(
             (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-            items.length
+            processedItems.length
           )}{' '}
-          of {items.length} items
+          of {processedItems.length} rows ({items.length} total items)
         </div>
         <div className="flex items-center gap-2">
           <Button

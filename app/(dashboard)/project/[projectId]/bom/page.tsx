@@ -16,6 +16,7 @@ import { transferItemsToWorkingBom, getDuplicateCount } from '@/lib/bom/transfer
 import { applyVendorPricesToBom } from '@/lib/bom/vendorPriceService';
 import { getBomGroups } from '@/lib/bom/templateBomService';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useProject } from '@/lib/context/ProjectContext';
 import type { BomItem, BomGroup, TemplateBomItem } from '@/types';
 import { 
   AlertCircle,
@@ -26,6 +27,10 @@ import {
   Wrench,
   Import,
   History,
+  Maximize2,
+  Minimize2,
+  PanelLeftClose,
+  PanelLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui/sonner';
@@ -34,6 +39,7 @@ export default function BomControlPanelPage() {
   const params = useParams();
   const projectId = params?.projectId as string;
   const { user } = useAuth();
+  const { project } = useProject();
 
   // Selection state
   const [selectedTemplateItems, setSelectedTemplateItems] = useState<Set<string>>(new Set());
@@ -43,6 +49,9 @@ export default function BomControlPanelPage() {
   // Dialog state
   const [isAddItemsOpen, setIsAddItemsOpen] = useState(false);
   const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
+  
+  // Panel expand/collapse state
+  const [isTemplatePanelCollapsed, setIsTemplatePanelCollapsed] = useState(false);
 
   // Transfer state
   const [transferring, setTransferring] = useState(false);
@@ -323,30 +332,38 @@ export default function BomControlPanelPage() {
 
       {/* Main content - Master Detail Layout */}
       <div className="flex-1 min-h-0 flex flex-col">
-        <div className="flex-1 grid grid-cols-12 gap-4 min-h-0">
-          {/* Left Panel - Template BOM */}
-          <div className="col-span-4 min-h-0">
-            <Card className="h-full border-[var(--accent-blue)]/20 overflow-hidden">
-              {templateLoading ? (
-                <div className="h-full p-4 space-y-4">
-                  <Skeleton className="h-8 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                </div>
-              ) : (
-                <TemplateBomPanel
-                  items={templateItems}
-                  loading={templateLoading}
-                  selectedItems={selectedTemplateItems}
-                  onSelectionChange={setSelectedTemplateItems}
-                />
-              )}
-            </Card>
-          </div>
+        <div className={cn(
+          'flex-1 grid gap-4 min-h-0 transition-all duration-300',
+          isTemplatePanelCollapsed ? 'grid-cols-1' : 'grid-cols-12'
+        )}>
+          {/* Left Panel - Template BOM (collapsible) */}
+          {!isTemplatePanelCollapsed && (
+            <div className="col-span-4 min-h-0">
+              <Card className="h-full border-[var(--accent-blue)]/20 overflow-hidden">
+                {templateLoading ? (
+                  <div className="h-full p-4 space-y-4">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : (
+                  <TemplateBomPanel
+                    items={templateItems}
+                    loading={templateLoading}
+                    selectedItems={selectedTemplateItems}
+                    onSelectionChange={setSelectedTemplateItems}
+                  />
+                )}
+              </Card>
+            </div>
+          )}
 
           {/* Right Panel - Working BOM */}
-          <div className="col-span-8 min-h-0">
+          <div className={cn(
+            'min-h-0',
+            isTemplatePanelCollapsed ? 'col-span-1' : 'col-span-8'
+          )}>
             <Card className="h-full border-[var(--accent-green)]/20 overflow-hidden">
               <WorkingBomPanel
                 items={bomItems}
@@ -361,6 +378,9 @@ export default function BomControlPanelPage() {
                 selectedItemId={selectedWorkingItem?.id}
                 assemblyCodes={assemblyCodes}
                 filterItems={filterWorkingItems}
+                projectName={project?.name || 'BOM'}
+                isExpanded={isTemplatePanelCollapsed}
+                onToggleExpand={() => setIsTemplatePanelCollapsed(!isTemplatePanelCollapsed)}
               />
             </Card>
           </div>

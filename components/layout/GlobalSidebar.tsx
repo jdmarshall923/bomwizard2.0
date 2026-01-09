@@ -3,13 +3,16 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, FolderOpen, Package, Building2, PoundSterling, Settings, Plug, ChevronLeft, ChevronRight, ClipboardCheck, Layers } from 'lucide-react';
+import { Home, FolderOpen, Package, Building2, PoundSterling, Settings, Plug, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardList, Activity, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { NotificationBell } from '@/components/activity/NotificationBell';
 
 const navigation = [
   { name: 'Home', href: '/', icon: Home },
   { name: 'Projects', href: '/projects', icon: FolderOpen },
+  { name: 'Specs', href: '/specs', icon: ClipboardList },
   { name: 'Pending Specs', href: '/specs/pending', icon: ClipboardCheck },
+  { name: 'Activity', href: '/activity', icon: Activity },
   {
     name: 'Master Data',
     items: [
@@ -80,7 +83,7 @@ export function GlobalSidebar() {
       </button>
 
       {/* Header */}
-      <div className="flex h-16 items-center border-b border-[var(--border-subtle)] px-4">
+      <div className="flex h-16 items-center justify-between border-b border-[var(--border-subtle)] px-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-gradient-to-br from-[var(--accent-blue)] to-[var(--accent-blue-light)] flex items-center justify-center shadow-lg glow-blue">
             <span className="text-white font-bold text-sm">BOM</span>
@@ -89,6 +92,8 @@ export function GlobalSidebar() {
             <span className="font-bold text-lg gradient-text whitespace-nowrap sidebar-text-fade-in">BOM Wizard</span>
           )}
         </div>
+        {/* Notification Bell */}
+        {isExpanded && <NotificationBell />}
       </div>
 
       {/* Navigation */}

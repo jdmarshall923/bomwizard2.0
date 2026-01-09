@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BomTree } from './BomTree';
 import { BomTable } from './BomTable';
 import { BomFilters } from './BomFilters';
+import { ExportDropdown } from './ExportDropdown';
 import type { BomFilters as BomFiltersType } from '@/lib/hooks/useBom';
 import {
   Wrench,
@@ -19,9 +20,12 @@ import {
   Sparkles,
   AlertCircle,
   Plus,
-  Download,
   Layers,
   RefreshCw,
+  Maximize2,
+  Minimize2,
+  PanelLeftClose,
+  PanelLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -44,11 +48,13 @@ interface WorkingBomPanelProps {
   onAddItems?: () => void; // Phase 3.75: Single "Add Items" button
   onAddGroup?: () => void;
   onApplyPrices?: () => void;
-  onExport?: () => void;
   applyingPrices?: boolean;
   selectedItemId?: string | null;
   assemblyCodes: string[];
   filterItems: (filters: BomFiltersType) => BomItem[];
+  projectName?: string; // For export filename
+  isExpanded?: boolean;  // Phase 14: Expand to full width
+  onToggleExpand?: () => void;
 }
 
 type ViewMode = 'tree' | 'table';
@@ -73,11 +79,13 @@ export function WorkingBomPanel({
   onAddItems,
   onAddGroup,
   onApplyPrices,
-  onExport,
   applyingPrices = false,
   selectedItemId,
   assemblyCodes,
   filterItems,
+  projectName = 'BOM',
+  isExpanded = false,
+  onToggleExpand,
 }: WorkingBomPanelProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('tree');
   const [filters, setFilters] = useState<BomFiltersType>(defaultFilters);
@@ -115,6 +123,28 @@ export function WorkingBomPanel({
             Working BOM
           </h3>
           <div className="flex items-center gap-1">
+            {/* Expand/Collapse Button - Phase 14 */}
+            {onToggleExpand && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={onToggleExpand}
+                title={isExpanded ? 'Show Template BOM' : 'Expand Table'}
+              >
+                {isExpanded ? (
+                  <>
+                    <PanelLeft className="h-3.5 w-3.5 mr-1" />
+                    Show Template
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="h-3.5 w-3.5 mr-1" />
+                    Expand
+                  </>
+                )}
+              </Button>
+            )}
             {onApplyPrices && items.length > 0 && (
               <Button
                 variant="ghost"
@@ -131,12 +161,13 @@ export function WorkingBomPanel({
                 Apply Prices
               </Button>
             )}
-            {onExport && (
-              <Button variant="ghost" size="sm" className="h-7 text-xs">
-                <Download className="h-3.5 w-3.5 mr-1" />
-                Export
-              </Button>
-            )}
+            {/* Export Dropdown - Phase 14 */}
+            <ExportDropdown 
+              items={filteredItems}
+              projectName={projectName}
+              variant="ghost"
+              size="sm"
+            />
             {onAddGroup && items.length > 0 && (
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onAddGroup}>
                 <Layers className="h-3.5 w-3.5 mr-1" />
