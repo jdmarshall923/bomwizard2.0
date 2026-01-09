@@ -80,6 +80,18 @@ service cloud.firestore {
         allow write: if isAuthenticated() && isProjectMember(projectId);
       }
       
+      // Template Groups - project members can read, only owner can write (created during import)
+      match /templateGroups/{groupId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow write: if isAuthenticated() && isProjectOwner(projectId);
+      }
+      
+      // Group Selections - project members can read/write (for working BOM creation)
+      match /groupSelections/{selectionId} {
+        allow read: if isAuthenticated() && isProjectMember(projectId);
+        allow write: if isAuthenticated() && isProjectMember(projectId);
+      }
+      
       // Assemblies - project members can read/write
       match /assemblies/{assemblyId} {
         allow read: if isAuthenticated() && isProjectMember(projectId);

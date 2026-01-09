@@ -370,11 +370,16 @@ export async function deleteNewPart(
   const newPart = await getNewPart(projectId, newPartId);
   if (newPart?.bomItemId) {
     const bomItemRef = doc(db, 'projects', projectId, 'bomItems', newPart.bomItemId);
-    await updateDoc(bomItemRef, {
-      newPartTrackerId: null,
-      newPartStatus: null,
-      updatedAt: Timestamp.now(),
-    });
+    
+    // Check if the BOM item still exists before trying to update it
+    const bomItemDoc = await getDoc(bomItemRef);
+    if (bomItemDoc.exists()) {
+      await updateDoc(bomItemRef, {
+        newPartTrackerId: null,
+        newPartStatus: null,
+        updatedAt: Timestamp.now(),
+      });
+    }
   }
 
   const docRef = doc(db, 'projects', projectId, 'newParts', newPartId);

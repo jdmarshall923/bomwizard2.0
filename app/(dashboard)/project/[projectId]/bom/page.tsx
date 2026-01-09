@@ -72,7 +72,7 @@ export default function BomControlPanelPage() {
   // Pricing state
   const [applyingPrices, setApplyingPrices] = useState(false);
 
-  // BOM groups state
+  // BOM groups state (from template)
   const [bomGroups, setBomGroups] = useState<BomGroup[]>([]);
 
   // Fetch Working BOM data
@@ -125,6 +125,42 @@ export default function BomControlPanelPage() {
       getBomGroups(projectId).then(setBomGroups).catch(console.error);
     }
   }, [projectId, hasTemplate]);
+
+  // Working BOM groups (derived from actual items in working BOM)
+  // Only shows groups that currently have items in the working BOM
+  const workingBomGroups = useMemo(() => {
+    if (!bomItems.length) return [];
+    
+    // Get unique group codes from working BOM items
+    const groupCodesInWorkingBom = new Set<string>();
+    bomItems.forEach(item => {
+      if (item.groupCode) {
+        groupCodesInWorkingBom.add(item.groupCode);
+      }
+    });
+    
+    // Match with bomGroups to get full group info, or create minimal group objects
+    const groups: BomGroup[] = [];
+    groupCodesInWorkingBom.forEach(groupCode => {
+      const existingGroup = bomGroups.find(g => g.groupCode === groupCode);
+      if (existingGroup) {
+        groups.push(existingGroup);
+      } else {
+        // Create a minimal group object for groups not in template
+        groups.push({
+          id: groupCode,
+          groupCode: groupCode,
+          description: groupCode,
+          groupType: 'assembly',
+          isStandard: false,
+          itemCount: bomItems.filter(i => i.groupCode === groupCode).length,
+          maxLevel: Math.max(...bomItems.filter(i => i.groupCode === groupCode).map(i => i.level || 0)),
+        });
+      }
+    });
+    
+    return groups.sort((a, b) => a.groupCode.localeCompare(b.groupCode));
+  }, [bomItems, bomGroups]);
 
   // Check for duplicates when selection changes
   useEffect(() => {
@@ -478,7 +514,7 @@ export default function BomControlPanelPage() {
         open={isAddItemsOpen}
         onOpenChange={setIsAddItemsOpen}
         projectId={projectId}
-        groups={bomGroups}
+        groups={workingBomGroups}
         existingItems={bomItems}
         onItemsAdded={handleAddItemsResult}
       />

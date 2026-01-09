@@ -206,7 +206,7 @@ export function ItemEditDrawer({ item, open, onClose, onSave, onDelete }: ItemEd
         </SheetHeader>
 
         {/* Item Info */}
-        <div className="mt-6 space-y-4">
+        <div className="mt-6 space-y-4 px-6">
           <div className="grid grid-cols-2 gap-4 p-3 bg-[var(--bg-tertiary)] rounded-lg">
             <div className="flex items-center gap-2">
               <Boxes className="h-4 w-4 text-[var(--text-tertiary)]" />

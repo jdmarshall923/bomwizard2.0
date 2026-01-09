@@ -1,11 +1,25 @@
 import { useCollection } from 'react-firebase-hooks/firestore';
 import { collection, query, orderBy } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { onAuthStateChanged } from 'firebase/auth';
+import { db, auth } from '@/lib/firebase/config';
 import { Project } from '@/types';
+import { useState, useEffect } from 'react';
 
 export function useProjects() {
-  const [snapshot, loading, error] = useCollection(
-    query(collection(db, 'projects'), orderBy('createdAt', 'desc'))
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Track auth state to avoid permission errors during initial load
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const [snapshot, projectsLoading, error] = useCollection(
+    isAuthenticated
+      ? query(collection(db, 'projects'), orderBy('createdAt', 'desc'))
+      : null
   );
 
   const projects: Project[] = snapshot?.docs.map((doc) => ({
@@ -15,7 +29,7 @@ export function useProjects() {
 
   return {
     projects,
-    loading,
+    loading: !isAuthenticated || projectsLoading,
     error,
   };
 }

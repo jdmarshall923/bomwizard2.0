@@ -1,6 +1,6 @@
 import { TemplateBomItem, BomItem, BomGroup, BomItemType, ItemSource } from '@/types';
 import { Timestamp, writeBatch, collection, doc, serverTimestamp, updateDoc, getDocs, query, orderBy, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { db, waitForAuth } from '@/lib/firebase/config';
 import { transformData, ColumnMappings } from '@/lib/import/columnMapper';
 import { createDocument } from '@/lib/firebase/firestore';
 
@@ -113,6 +113,11 @@ export async function importToTemplateBom(
   const importId = `import-${Date.now()}`;
 
   try {
+    // Ensure auth is ready before making Firestore operations
+    const user = await waitForAuth();
+    if (!user) {
+      throw new Error('Authentication required to import BOM');
+    }
     // Transform data using mappings
     const transformedData = transformData(data, mappings);
 
@@ -417,6 +422,9 @@ async function writeBomGroups(
  * Get all BOM Groups for a project
  */
 export async function getBomGroups(projectId: string): Promise<BomGroup[]> {
+  // Ensure auth is ready before querying
+  await waitForAuth();
+  
   const groupsRef = collection(db, `projects/${projectId}/templateGroups`);
   
   try {
@@ -474,6 +482,9 @@ async function updateProjectTemplateInfo(
  * Get all template BOM items for a project
  */
 export async function getTemplateBomItems(projectId: string): Promise<TemplateBomItem[]> {
+  // Ensure auth is ready before querying
+  await waitForAuth();
+  
   const templateBomRef = collection(db, `projects/${projectId}/templateBom`);
   const q = query(templateBomRef, orderBy('assemblyCode', 'asc'), orderBy('level', 'asc'), orderBy('sequence', 'asc'));
   const snapshot = await getDocs(q);
@@ -528,6 +539,9 @@ export async function saveGroupSelections(
  * Get group selections for a project
  */
 export async function getGroupSelections(projectId: string): Promise<GroupSelection[]> {
+  // Ensure auth is ready before querying
+  await waitForAuth();
+  
   const selectionsRef = collection(db, `projects/${projectId}/groupSelections`);
   const snapshot = await getDocs(selectionsRef);
   

@@ -180,7 +180,8 @@ export function BatchAddItemsDialog({
       setIsNewPartCategory(false);
       setIsNewPartTrack(false);
       setItems([]);
-      setShowNewGroup(false);
+      // Auto-show new group form if no groups exist
+      setShowNewGroup(groups.length === 0);
       setNewGroup({
         code: nextGroupCode,
         description: '',
@@ -556,62 +557,71 @@ export function BatchAddItemsDialog({
             {/* Group Selection */}
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <Label className="text-xs">Add to</Label>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowNewGroup(!showNewGroup)}
-                  className="h-6 text-xs ml-auto"
-                >
-                  {showNewGroup ? (
-                    <>
-                      <ChevronDown className="h-3 w-3 mr-1" />
-                      Hide New Group
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="h-3 w-3 mr-1" />
-                      Create New Group
-                    </>
-                  )}
-                </Button>
+                <Label className="text-xs">Add to Group</Label>
+                {allGroups.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowNewGroup(!showNewGroup)}
+                    className="h-6 text-xs ml-auto"
+                  >
+                    {showNewGroup ? (
+                      <>
+                        <ChevronDown className="h-3 w-3 mr-1" />
+                        Select Existing
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-3 w-3 mr-1" />
+                        Create New Group
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
 
-              {showNewGroup ? (
-                <div className="grid grid-cols-3 gap-2 p-3 bg-[var(--bg-tertiary)] rounded-md">
-                  <div>
-                    <Label className="text-xs">Group Code</Label>
-                    <Input
-                      value={newGroup.code}
-                      onChange={(e) => setNewGroup(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
-                      placeholder="GRP-CUSTOM-A01"
-                      className="mt-1 font-mono text-xs"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Description</Label>
-                    <Input
-                      value={newGroup.description}
-                      onChange={(e) => setNewGroup(prev => ({ ...prev, description: e.target.value }))}
-                      placeholder="Custom Assembly"
-                      className="mt-1 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Category</Label>
-                    <Select 
-                      value={newGroup.category} 
-                      onValueChange={(v) => setNewGroup(prev => ({ ...prev, category: v }))}
-                    >
-                      <SelectTrigger className="mt-1 h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CATEGORY_OPTIONS.map(cat => (
-                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+              {showNewGroup || allGroups.length === 0 ? (
+                <div className="space-y-2">
+                  {allGroups.length === 0 && (
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      No groups in working BOM yet. Create a new group to add items.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-3 gap-2 p-3 bg-[var(--bg-tertiary)] rounded-md">
+                    <div>
+                      <Label className="text-xs">Group Code</Label>
+                      <Input
+                        value={newGroup.code}
+                        onChange={(e) => setNewGroup(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                        placeholder="GRP-CUSTOM-A01"
+                        className="mt-1 font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Description</Label>
+                      <Input
+                        value={newGroup.description}
+                        onChange={(e) => setNewGroup(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="Custom Assembly"
+                        className="mt-1 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Category</Label>
+                      <Select 
+                        value={newGroup.category} 
+                        onValueChange={(v) => setNewGroup(prev => ({ ...prev, category: v }))}
+                      >
+                        <SelectTrigger className="mt-1 h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATEGORY_OPTIONS.map(cat => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
               ) : (

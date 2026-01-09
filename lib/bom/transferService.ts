@@ -1,6 +1,6 @@
 import { TemplateBomItem, BomItem, VendorContractPrice } from '@/types';
 import { Timestamp, writeBatch, collection, doc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { db, waitForAuth } from '@/lib/firebase/config';
 import { createVersion, shouldAutoCreateVersion, generateTriggerDetails } from './versionService';
 
 /**
@@ -34,6 +34,9 @@ export async function findDuplicateItems(
   templateItemIds: string[],
   templateItems: TemplateBomItem[]
 ): Promise<Set<string>> {
+  // Ensure auth is ready before querying
+  await waitForAuth();
+  
   const duplicates = new Set<string>();
   
   // Get all working BOM items
@@ -96,6 +99,9 @@ export async function transferItemsToWorkingBom(
   userId?: string,
   userName?: string
 ): Promise<TransferResult> {
+  // Ensure auth is ready before making Firestore operations
+  await waitForAuth();
+  
   const result: TransferResult = {
     success: true,
     transferred: 0,

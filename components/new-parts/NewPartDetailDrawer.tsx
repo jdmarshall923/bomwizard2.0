@@ -204,11 +204,11 @@ export function NewPartDetailDrawer({
           </div>
         </SheetHeader>
 
-        <Separator className="my-4" />
+        <Separator className="my-4 mx-6" />
 
         {/* Quick Status Change */}
         {part.status !== 'complete' && part.status !== 'cancelled' && (
-          <div className="mb-4">
+          <div className="mb-4 px-6">
             <Label className="text-xs text-[var(--text-tertiary)] uppercase tracking-wider">
               Move to Stage
             </Label>
@@ -229,7 +229,7 @@ export function NewPartDetailDrawer({
         )}
 
         {/* 6-Tab Layout */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full px-6">
           <TabsList className="grid w-full grid-cols-6 bg-[var(--bg-tertiary)] h-9">
             <TabsTrigger value="overview" className="text-xs px-2">
               <ClipboardList className="h-3 w-3 sm:mr-1" />
@@ -1250,11 +1250,11 @@ export function NewPartDetailDrawer({
           </TabsContent>
         </Tabs>
 
-        <Separator className="my-4" />
+        <Separator className="my-4 mx-6" />
 
         {/* Complete Part Form */}
         {showCompleteForm && part.status === 'procurement' && (
-          <div className="space-y-4 p-4 rounded-lg border border-[var(--accent-green)]/30 bg-[var(--accent-green)]/5 mb-4">
+          <div className="space-y-4 p-4 rounded-lg border border-[var(--accent-green)]/30 bg-[var(--accent-green)]/5 mb-4 mx-6">
             <h4 className="font-semibold text-[var(--accent-green)] flex items-center gap-2">
               <Check className="h-4 w-4" />
               Complete Part - Assign Final B-Code
@@ -1312,7 +1312,7 @@ export function NewPartDetailDrawer({
 
         {/* Final B-Code Display (if complete) */}
         {part.finalItemCode && (
-          <div className="p-4 rounded-lg border border-[var(--accent-green)]/30 bg-[var(--accent-green)]/5 mb-4">
+          <div className="p-4 rounded-lg border border-[var(--accent-green)]/30 bg-[var(--accent-green)]/5 mb-4 mx-6">
             <h4 className="font-semibold text-[var(--accent-green)] flex items-center gap-2 mb-3">
               <Check className="h-4 w-4" />
               Completed
@@ -1338,7 +1338,7 @@ export function NewPartDetailDrawer({
         )}
 
         {/* Action Buttons */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 px-6 pb-6">
           {isEditing ? (
             <>
               <Button

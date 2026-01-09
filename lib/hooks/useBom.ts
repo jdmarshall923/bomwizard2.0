@@ -1,10 +1,11 @@
 'use client';
 
 import { useCollection } from 'react-firebase-hooks/firestore';
-import { collection, query, orderBy, doc, updateDoc, deleteDoc, Timestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { collection, query, orderBy, doc, updateDoc, deleteDoc, getDoc, getDocs, where, Timestamp } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import { db, auth } from '@/lib/firebase/config';
 import { BomItem, Assembly, TemplateBomItem } from '@/types';
-import { useMemo, useCallback, useState } from 'react';
+import { useMemo, useCallback, useState, useEffect } from 'react';
 
 export interface BomFilters {
   searchTerm: string;
@@ -42,6 +43,15 @@ export interface TemplateBomStats {
 
 export function useBom(projectId: string | null, versionId?: string | null) {
   const [optimisticUpdates, setOptimisticUpdates] = useState<Record<string, Partial<BomItem>>>({});
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  
+  // Track auth state to avoid permission errors during initial load
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+    });
+    return () => unsubscribe();
+  }, []);
   
   const bomCollectionPath = projectId 
     ? (versionId
@@ -51,9 +61,9 @@ export function useBom(projectId: string | null, versionId?: string | null) {
 
   const assembliesCollectionPath = projectId ? `projects/${projectId}/assemblies` : null;
 
-  // Fetch BOM items - only create query if we have a valid path
+  // Fetch BOM items - only create query if we have a valid path AND authenticated
   const [bomSnapshot, bomLoading, bomError] = useCollection(
-    bomCollectionPath
+    bomCollectionPath && isAuthenticated
       ? query(
           collection(db, bomCollectionPath),
           orderBy('assemblyCode', 'asc'),
@@ -63,9 +73,9 @@ export function useBom(projectId: string | null, versionId?: string | null) {
       : null
   );
 
-  // Fetch assemblies - only create query if we have a valid path
+  // Fetch assemblies - only create query if we have a valid path AND authenticated
   const [assembliesSnapshot, assembliesLoading, assembliesError] = useCollection(
-    assembliesCollectionPath
+    assembliesCollectionPath && isAuthenticated
       ? query(
           collection(db, assembliesCollectionPath),
           orderBy('code', 'asc')
@@ -240,20 +250,44 @@ export function useBom(projectId: string | null, versionId?: string | null) {
     }
   }, [bomCollectionPath, bomItems]);
 
-  // Delete BOM item
+  // Delete BOM item and associated NewPart if exists
   const deleteBomItem = useCallback(async (itemId: string): Promise<void> => {
-    if (!bomCollectionPath) {
+    if (!bomCollectionPath || !projectId) {
       throw new Error('No project selected');
     }
 
     const docRef = doc(db, bomCollectionPath, itemId);
+    
+    // Get the BOM item first to check for linked NewPart
+    const bomDoc = await getDoc(docRef);
+    if (bomDoc.exists()) {
+      const bomData = bomDoc.data() as BomItem;
+      
+      // If there's a linked NewPart via newPartTrackerId, delete it
+      if (bomData.newPartTrackerId) {
+        const newPartRef = doc(db, `projects/${projectId}/newParts`, bomData.newPartTrackerId);
+        await deleteDoc(newPartRef);
+      } else {
+        // Also check for NewParts linked via bomItemId (backup check)
+        const newPartsRef = collection(db, `projects/${projectId}/newParts`);
+        const q = query(newPartsRef, where('bomItemId', '==', itemId));
+        const snapshot = await getDocs(q);
+        
+        // Delete any NewParts that reference this BOM item
+        for (const docSnap of snapshot.docs) {
+          await deleteDoc(docSnap.ref);
+        }
+      }
+    }
+    
+    // Delete the BOM item
     await deleteDoc(docRef);
-  }, [bomCollectionPath]);
+  }, [bomCollectionPath, projectId]);
 
   return {
     bomItems,
     assemblies,
-    loading: bomLoading || assembliesLoading,
+    loading: (!isAuthenticated && !!projectId) || bomLoading || assembliesLoading,
     error: bomError || assembliesError,
     updateBomItem,
     deleteBomItem,
@@ -301,17 +335,30 @@ export function useBomGroupedByAssembly(projectId: string | null, versionId?: st
  * Hook to fetch Template BOM data (read-only)
  */
 export function useTemplateBom(projectId: string | null) {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  
+  // Track auth state to avoid permission errors during initial load
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+    });
+    return () => unsubscribe();
+  }, []);
+  
   const templateCollectionPath = projectId 
     ? `projects/${projectId}/templateBom`
     : null;
 
   // Fetch template BOM items - use simpler ordering to avoid index issues
   // Sort client-side instead of requiring a composite index
-  const [templateSnapshot, loading, error] = useCollection(
-    templateCollectionPath
+  // Only query when authenticated to avoid permission errors
+  const [templateSnapshot, templateLoading, error] = useCollection(
+    templateCollectionPath && isAuthenticated
       ? collection(db, templateCollectionPath)
       : null
   );
+  
+  const loading = (!isAuthenticated && !!projectId) || templateLoading;
 
   // Parse and sort template items client-side
   const templateItems: TemplateBomItem[] = useMemo(() => {

@@ -1,5 +1,5 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
+import { getAuth, Auth, onAuthStateChanged, User } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
@@ -24,6 +24,39 @@ if (getApps().length === 0) {
 export const auth: Auth = getAuth(app);
 export const db: Firestore = getFirestore(app);
 export const storage: FirebaseStorage = getStorage(app);
+
+/**
+ * Wait for Firebase Auth to be ready and return the current user.
+ * This ensures the auth token is attached to subsequent Firestore requests.
+ * Use this in services before making authenticated Firestore calls.
+ */
+export function waitForAuth(): Promise<User | null> {
+  return new Promise((resolve) => {
+    // If there's already a current user, resolve immediately
+    if (auth.currentUser) {
+      resolve(auth.currentUser);
+      return;
+    }
+    
+    // Otherwise wait for auth state to be determined
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      resolve(user);
+    });
+  });
+}
+
+/**
+ * Ensure user is authenticated before proceeding.
+ * Throws an error if not authenticated.
+ */
+export async function requireAuth(): Promise<User> {
+  const user = await waitForAuth();
+  if (!user) {
+    throw new Error('Authentication required');
+  }
+  return user;
+}
 
 export default app;
 

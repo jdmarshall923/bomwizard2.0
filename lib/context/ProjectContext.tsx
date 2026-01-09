@@ -3,7 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Project } from '@/types';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { onAuthStateChanged } from 'firebase/auth';
+import { db, auth } from '@/lib/firebase/config';
 
 interface ProjectContextType {
   project: Project | null;
@@ -19,11 +20,21 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Track auth state to avoid permission errors during initial load
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Use real-time listener to always have fresh project data
+  // Wait for authentication before subscribing
   useEffect(() => {
-    if (!projectId) {
-      setProject(null);
+    if (!projectId || !isAuthenticated) {
+      if (!projectId) setProject(null);
       return;
     }
 
@@ -48,7 +59,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     );
 
     return () => unsubscribe();
-  }, [projectId]);
+  }, [projectId, isAuthenticated]);
 
   // Manual refresh (triggers re-fetch via snapshot)
   const refresh = useCallback(() => {

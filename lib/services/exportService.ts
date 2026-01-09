@@ -11,8 +11,9 @@ import {
  * Phase 14: Export Service
  * 
  * Export BOM data to XLSX with formatting:
- * - Blue frozen header row
- * - Olive green group rows (level 0/1)
+ * - Blue frozen header row with auto-filter
+ * - Subtle green group rows (level 0/1)
+ * - Yellow highlighting for new parts
  * - White part rows
  * - Sequence numbers with gaps
  */
@@ -104,8 +105,8 @@ export async function exportToExcel(
       
       if (isGroupRow) {
         cellStyles[cellRef] = {
-          fill: { fgColor: { rgb: '808000' } },  // Olive
-          font: { bold: true, color: { rgb: 'FFFFFF' } },
+          fill: { fgColor: { rgb: 'E2EFDA' } },  // Subtle green
+          font: { bold: true },
         };
       }
     }
@@ -349,8 +350,8 @@ function processItemsWithGroups(items: BomItem[]): BomItem[] {
  * Requires exceljs package: npm install exceljs
  * 
  * Formatting:
- * - Headers: Blue background with white bold text
- * - Level 1 parts (groups/assemblies): Olive green background with white bold text  
+ * - Headers: Blue background with white bold text, auto-filter enabled
+ * - Level 1 parts (groups/assemblies): Subtle light green background with bold text  
  * - New parts: Bright yellow background
  * - Regular parts: White background
  */
@@ -424,13 +425,13 @@ export async function exportWithStyles(
         cell.alignment = { vertical: 'middle' };
       });
       
-      // Style Group rows (level 1 assemblies) - Olive green
+      // Style Group rows (level 1 assemblies) - Subtle green
       if (isGroupRow) {
-        row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        row.font = { bold: true };
         row.fill = {
           type: 'pattern',
           pattern: 'solid',
-          fgColor: { argb: 'FF808000' },  // Olive green
+          fgColor: { argb: 'FFE2EFDA' },  // Subtle light green
         };
         row.height = 22;
       }
