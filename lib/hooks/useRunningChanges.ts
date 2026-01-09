@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, FirestoreError } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { RunningChange, RunningChangeStats } from '@/types/runningChange';
 import { calculateRunningChangeStats } from '@/lib/runningChanges/runningChangeService';
@@ -71,10 +71,19 @@ export function useRunningChanges(
           
           setRunningChanges(changes);
           setLoading(false);
+          setError(null);
         },
-        (err) => {
+        (err: FirestoreError) => {
+          // Silently handle permission errors - they're expected when 
+          // the hook loads before auth is fully established or when
+          // the collection doesn't exist yet
+          if (err.code === 'permission-denied') {
+            setRunningChanges([]);
+            setLoading(false);
+            return;
+          }
           console.error('Error fetching running changes:', err);
-          setError(err as Error);
+          setError(err);
           setLoading(false);
         }
       );
