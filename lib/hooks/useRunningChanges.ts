@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { collection, onSnapshot, query, where, orderBy, FirestoreError } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { collection, onSnapshot, query, where, FirestoreError, getDocs } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import { db, auth } from '@/lib/firebase/config';
 import { RunningChange, RunningChangeStats } from '@/types/runningChange';
 import { calculateRunningChangeStats } from '@/lib/runningChanges/runningChangeService';
 
@@ -23,6 +24,7 @@ interface UseRunningChangesReturn {
 
 /**
  * Hook to fetch and subscribe to running changes
+ * Waits for authentication before querying to avoid permission errors
  */
 export function useRunningChanges(
   options: UseRunningChangesOptions = {}
@@ -33,24 +35,47 @@ export function useRunningChanges(
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [refreshCounter, setRefreshCounter] = useState(0);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const refresh = useCallback(() => {
     setRefreshCounter(prev => prev + 1);
   }, []);
 
+  // Track auth state
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+      if (!user) {
+        setRunningChanges([]);
+        setLoading(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch running changes only when authenticated
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     const changesRef = collection(db, 'runningChanges');
     
     // Build query
-    let q;
-    if (activeOnly) {
-      q = query(changesRef, where('isActive', '==', true));
-    } else {
-      q = query(changesRef);
-    }
+    const q = activeOnly
+      ? query(changesRef, where('isActive', '==', true))
+      : query(changesRef);
+
+    const sortChanges = (changes: RunningChange[]) => {
+      return changes.sort((a, b) => {
+        const dateA = a.estimatedGoLiveDate?.toDate?.() || new Date(0);
+        const dateB = b.estimatedGoLiveDate?.toDate?.() || new Date(0);
+        return dateA.getTime() - dateB.getTime();
+      });
+    };
 
     if (realtime) {
       // Real-time subscription
@@ -62,21 +87,12 @@ export function useRunningChanges(
             ...docSnap.data(),
           })) as RunningChange[];
           
-          // Sort by go-live date
-          changes.sort((a, b) => {
-            const dateA = a.estimatedGoLiveDate?.toDate?.() || new Date(0);
-            const dateB = b.estimatedGoLiveDate?.toDate?.() || new Date(0);
-            return dateA.getTime() - dateB.getTime();
-          });
-          
-          setRunningChanges(changes);
+          setRunningChanges(sortChanges(changes));
           setLoading(false);
           setError(null);
         },
         (err: FirestoreError) => {
-          // Silently handle permission errors - they're expected when 
-          // the hook loads before auth is fully established or when
-          // the collection doesn't exist yet
+          // Silently handle permission errors
           if (err.code === 'permission-denied') {
             setRunningChanges([]);
             setLoading(false);
@@ -91,31 +107,28 @@ export function useRunningChanges(
       return () => unsubscribe();
     } else {
       // One-time fetch
-      import('firebase/firestore').then(({ getDocs }) => {
-        getDocs(q)
-          .then((snapshot) => {
-            const changes = snapshot.docs.map(docSnap => ({
-              id: docSnap.id,
-              ...docSnap.data(),
-            })) as RunningChange[];
-            
-            changes.sort((a, b) => {
-              const dateA = a.estimatedGoLiveDate?.toDate?.() || new Date(0);
-              const dateB = b.estimatedGoLiveDate?.toDate?.() || new Date(0);
-              return dateA.getTime() - dateB.getTime();
-            });
-            
-            setRunningChanges(changes);
+      getDocs(q)
+        .then((snapshot) => {
+          const changes = snapshot.docs.map(docSnap => ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          })) as RunningChange[];
+          
+          setRunningChanges(sortChanges(changes));
+          setLoading(false);
+        })
+        .catch((err) => {
+          if (err.code === 'permission-denied') {
+            setRunningChanges([]);
             setLoading(false);
-          })
-          .catch((err) => {
-            console.error('Error fetching running changes:', err);
-            setError(err as Error);
-            setLoading(false);
-          });
-      });
+            return;
+          }
+          console.error('Error fetching running changes:', err);
+          setError(err as Error);
+          setLoading(false);
+        });
     }
-  }, [activeOnly, realtime, refreshCounter]);
+  }, [activeOnly, realtime, refreshCounter, isAuthenticated]);
 
   // Calculate stats from the current data
   const stats = calculateRunningChangeStats(runningChanges);

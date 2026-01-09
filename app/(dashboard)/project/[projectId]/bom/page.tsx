@@ -107,12 +107,17 @@ export default function BomControlPanelPage() {
   }, [project]);
 
   // Check for running changes affecting this BOM
+  // Only check after BOM items have loaded to avoid permission errors during initial auth
+  const shouldCheckRunningChanges = !workingLoading && bomItems.length >= 0;
   const {
     affectedItems,
     affectedCount,
     hasAffectedItems,
     loading: runningChangesLoading,
-  } = useAffectedParts(bomItems, { projectDtxDate });
+  } = useAffectedParts(
+    shouldCheckRunningChanges ? bomItems : [], 
+    { projectDtxDate }
+  );
 
   // Load BOM groups
   useEffect(() => {
