@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ProjectGate, GateStatus, GateMeta } from '@/types';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, deleteField } from 'firebase/firestore';
 import { format } from 'date-fns';
 import {
   DropdownMenu,
@@ -81,13 +81,17 @@ export function GateCard({ gate, meta, onUpdate, isEditable = true }: GateCardPr
   };
 
   const handleStatusChange = (newStatus: GateStatus) => {
-    const updates: Partial<ProjectGate> = { status: newStatus };
+    // Use type assertion to allow deleteField() sentinel value
+    const updates: Partial<ProjectGate> & { completedAt?: Timestamp | ReturnType<typeof deleteField> } = { 
+      status: newStatus 
+    };
     if (newStatus === 'passed') {
       updates.completedAt = Timestamp.now();
-    } else {
-      updates.completedAt = undefined;
+    } else if (gate.completedAt) {
+      // Only send deleteField if there was a completedAt to remove
+      updates.completedAt = deleteField() as unknown as Timestamp;
     }
-    onUpdate(updates);
+    onUpdate(updates as Partial<ProjectGate>);
   };
 
   const handleNotesBlur = () => {

@@ -5,7 +5,7 @@
  * and gate readiness based on working BOM data.
  */
 
-import { collection, doc, getDoc, getDocs, query, updateDoc, Timestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, updateDoc, Timestamp, FieldValue } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { 
   Project, 
@@ -210,21 +210,26 @@ export async function updateProjectGates(
 
 /**
  * Update a single gate
+ * Uses dot notation to support deleteField() for removing fields like completedAt
  */
 export async function updateProjectGate(
   projectId: string,
   gateKey: GateKey,
-  updates: Partial<ProjectGate>
+  updates: Partial<ProjectGate> & { completedAt?: Timestamp | FieldValue }
 ): Promise<void> {
-  const currentGates = await getProjectGates(projectId);
-  const updatedGates = {
-    ...currentGates,
-    [gateKey]: {
-      ...currentGates[gateKey],
-      ...updates,
-    },
+  const projectRef = doc(db, 'projects', projectId);
+  
+  // Build update object with dot notation for nested fields
+  // This allows deleteField() to work properly
+  const updateData: Record<string, unknown> = {
+    updatedAt: Timestamp.now(),
   };
-  await updateProjectGates(projectId, updatedGates);
+  
+  for (const [key, value] of Object.entries(updates)) {
+    updateData[`gates.${gateKey}.${key}`] = value;
+  }
+  
+  await updateDoc(projectRef, updateData);
 }
 
 /**
